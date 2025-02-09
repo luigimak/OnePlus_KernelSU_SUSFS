@@ -177,8 +177,8 @@ jobs:
           echo "Building the kernel..."
           rm ./common/android/abi_gki_protected_exports_* || echo "No protected exports!"
           rm ./msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
-          #git config --global user.email "bins4us@hotmail.com"
-          #git config --global user.name "TheWildJames"
+          #git config --global user.email "luigimak@hotmail.it"
+          #git config --global user.name "luigimak"
           #git add *
           #git commit -s -a -m "getting rid of -dirty"
           ./kernel_platform/oplus/build/oplus_build_kernel.sh pineapple gki
