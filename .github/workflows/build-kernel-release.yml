@@ -20,7 +20,7 @@ jobs:
     with:
       model: "OP13"
       soc: "sun"
-      branch: "oneplus/sm8750"
+      branch: "op13-only"
       manifest: "oneplus_13_v.xml"
       android_version: "android15"
       kernel_version: "6.6"
