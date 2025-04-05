@@ -61,7 +61,7 @@ jobs:
       - name: Generate and Create New Tag
         run: |
             # Fetch the latest tag from GitHub (this is the latest tag based on the GitHub API)
-            LATEST_TAG=$(gh api repos///tags --jq '.[0].name')
+            LATEST_TAG=$(gh api repos/$REPO_OWNER/$REPO_NAME/tags --jq '.[0].name')
             if [ -z "$LATEST_TAG" ]; then
               LATEST_TAG="v1.5.5-r0"  # Default to v1.5.3-0 if no tag exists
             fi
