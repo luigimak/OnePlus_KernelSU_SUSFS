@@ -1,4 +1,4 @@
-name: Build and Release OnePlus 13 Kernels
+name: Build and Release OnePlus Kernels
 
 permissions:
   contents: write  # Allow writing to repository contents (for pushing tags)
