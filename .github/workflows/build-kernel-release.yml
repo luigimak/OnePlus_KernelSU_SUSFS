@@ -67,7 +67,7 @@ jobs:
             fi
             
             # Increment the suffix (e.g., v1.5.3-0 becomes v1.5.3-1)
-            NEW_TAG=$(echo "$LATEST_TAG" | awk -F'-r' '{suffix=; if (!suffix) suffix=0; suffix++; printf "%s-r%d", , suffix}')
+            NEW_TAG=$(echo "$LATEST_TAG" | awk -F'-r' '{suffix=$2; if (!suffix) suffix=0; suffix++; printf "%s-r%d", $1, suffix}')
             
             # Output the new tag to be used
             echo "New tag: $NEW_TAG"
