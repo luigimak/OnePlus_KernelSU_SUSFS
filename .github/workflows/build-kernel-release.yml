@@ -1,4 +1,4 @@
-name: Build and Release OnePlus Kernels
+name: Build and Release OnePlus 13 Kernels
 
 permissions:
   contents: write  # Allow writing to repository contents (for pushing tags)
@@ -14,7 +14,7 @@ on:
         default: true
 
 jobs:
-  build-kernel-op10pro:
+  build-kernel-op13:
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
@@ -28,15 +28,15 @@ jobs:
   trigger-release:
     runs-on: ubuntu-latest
     needs:
-      - build-kernel-op10pro
+      - build-kernel-op13
     if: ${{ inputs.make_release }}
     env:
       REPO_OWNER: TheWildJames
       REPO_NAME: OnePlus_KernelSU_SUSFS
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_NAME: "*TEST BUILD* OnePlus 10 Pro Kernel With KernelSU Next & SUSFS v1.5.5 *TEST BUILD*"
+      RELEASE_NAME: "*TEST BUILD* OnePlus 13 Kernel With KernelSU Next & SUSFS v1.5.5 *TEST BUILD*"
       RELEASE_NOTES: |
-        This release contains KernelSU Next and SUSFS v1.5.5 for OnePlus 10 Pro
+        This release contains KernelSU Next and SUSFS v1.5.5 for OnePlus 13
         
         Module: 
         -> https://github.com/sidex15/ksu_module_susfs
