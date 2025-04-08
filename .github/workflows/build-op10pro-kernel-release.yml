@@ -63,7 +63,7 @@ jobs:
             # Recupera l'ultimo tag da GitHub (questo è l'ultimo tag basato sull'API di GitHub)
             LATEST_TAG=$(gh api repos/$REPO_OWNER/$REPO_NAME/tags --jq '.[0].name')
             if [ -z "$LATEST_TAG" ]; then
-              LATEST_TAG="op10pro-r0"  # Default to v1.5.3-0 if no tag exists
+              LATEST_TAG="op10pro-r0"  # Predefinito a op10pro-r0 se non esistono tag
             fi
             
             # Incrementa il suffisso (es. op10pro-r0 diventa op10pro-r1)
