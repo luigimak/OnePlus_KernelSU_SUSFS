@@ -62,8 +62,10 @@ jobs:
         run: |
             # Recupera l'ultimo tag da GitHub (questo è l'ultimo tag basato sull'API di GitHub)
             LATEST_TAG=$(gh api repos/$REPO_OWNER/$REPO_NAME/tags --jq '.[0].name')
-            if [ -z "$LATEST_TAG" ]; then
+            echo "Fetched latest tag: $LATEST_TAG"
+            if [[ "$LATEST_TAG" != op11-* ]]; then
               LATEST_TAG="op11-r0"  # Predefinito a op11-r0 se non esistono tag
+              echo "No suitable tags found, defaulting to: $LATEST_TAG"
             fi
             
             # Incrementa il suffisso (es. op11-r0 diventa op11-r1)
@@ -91,10 +93,10 @@ jobs:
       - name: Create GitHub Release
         uses: actions/create-release@v1
         with:
-          tag_name: ${{ env.NEW_TAG }}  # Use the generated tag for the release
-          prerelease: true  # Mark the release as a pre-release
-          release_name: ${{ env.RELEASE_NAME }}  # Pass the RELEASE_NAME to the action
-          body: ${{ env.RELEASE_NOTES }}  # Pass the RELEASE_NOTES to the action
+          tag_name: ${{ env.NEW_TAG }}  # Usa il tag generato per il rilascio
+          prerelease: true  # Segna il rilascio come pre-release
+          release_name: ${{ env.RELEASE_NAME }}  # Passa il RELEASE_NAME all'azione
+          body: ${{ env.RELEASE_NOTES }}  # Passa il RELEASE_NOTES all'azione
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -107,7 +109,7 @@ jobs:
                   continue
               fi
 
-              # Upload the file to the GitHub release
+              # Carica il file nel rilascio GitHub
               echo "Uploading $file..."
               gh release upload ${{ env.NEW_TAG }} "$file"
           done
