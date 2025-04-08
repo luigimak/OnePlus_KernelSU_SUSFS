@@ -66,7 +66,7 @@ jobs:
               LATEST_TAG="op10t-r0"  # Predefinito a op10t-r0 se non esistono tag
             fi
             
-            # Incrementa il suffisso (es. op10pro-r0 diventa op10pro-r1)
+            # Incrementa il suffisso (es. op10t-r0 diventa op10t-r1)
             NEW_TAG=$(echo "$LATEST_TAG" | awk -F'-r' '{suffix=$2; if (!suffix) suffix=0; suffix++; printf "%s-r%d", $1, suffix}')
             echo "New tag: $NEW_TAG"
             
