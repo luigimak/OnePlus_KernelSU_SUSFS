@@ -191,6 +191,8 @@ runs:
               patch -p1 --forward --fuzz=3 < fix_selinux.c.patch
               cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_ksud.c.patch" ./
               patch -p1 --forward --fuzz=3 < fix_ksud.c.patch
+              cp ../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_rules.c.patch ./
+              patch -p1 --forward --fuzz=3 < fix_rules.c.patch
               ;;
             *)
               echo "Invalid version: $susfs_version"
