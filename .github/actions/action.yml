@@ -40,9 +40,9 @@ runs:
         run: |
           export DEBIAN_FRONTEND=noninteractive
           echo "DEBIAN_FRONTEND=noninteractive" >> $GITHUB_ENV
-          
-          df -h
           : << "COMMENT"
+          df -h
+          
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/powershell /usr/share/swift || true
           sudo docker image prune --all --force
           echo "some directories deleted"
@@ -61,14 +61,14 @@ runs:
           
           # Regex-based purges (for bulk families like mysql, php, dotnet)
           sudo apt-get purge -y $(dpkg-query -W -f='${binary:Package}\n' | grep -E '^mysql|^php|^dotnet') || true
-          
+          COMMENT
           # Clean up
           sudo apt-get autoremove -y
           sudo apt-get autoclean -y
           echo "some packages purged"
           
           df -h
-          COMMENT
+          
           sudo rm -rf * || true
           sudo rm -rf .[^.]* || true
           
