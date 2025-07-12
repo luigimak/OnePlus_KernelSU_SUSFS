@@ -66,16 +66,17 @@ runs:
           sudo apt-get autoremove -y
           sudo apt-get autoclean -y
           echo "some packages purged"
-          COMMENT
+          
           df -h
           
+          # Install dependencies
+          echo "Installing Repo and Python"
+          sudo apt update
+          sudo apt install -y python3 python-is-python3
+          COMMENT
+          echo "Work directory: $(pwd)"
           sudo rm -rf * || true
           sudo rm -rf .[^.]* || true
-          
-          # Install dependencies
-          # echo "Installing Repo and Python"
-          # sudo apt update
-          # sudo apt install -y python3 python-is-python3
           
           mkdir -p ./git-repo
           curl -sSL https://storage.googleapis.com/git-repo-downloads/repo > ./git-repo/repo
