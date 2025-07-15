@@ -206,7 +206,8 @@ runs:
               patch -p1 --forward --fuzz=3 < fix_ksud.c.patch
               cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_rules.c.patch" ./
               patch -p1 --forward --fuzz=3 < fix_rules.c.patch
-              curl -Ls https://raw.githubusercontent.com/fatalcoder524/kernel_patches_additional/refs/heads/main/fix_sucompat.patch | patch -p1 -F 3 --verbose
+              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_sucompat.c.patch" ./
+              patch -p1 --forward --fuzz=3 < fix_sucompat.c.patch
               ;;
             *)
               echo "Invalid version: $susfs_version"
@@ -218,6 +219,11 @@ runs:
           
           # Change to common directory and apply SUSFS patch
           cd ../common
+          
+          # SusFS Experimental Patches
+          echo "Patching susfs_dentry_null_checks!"
+          patch -p1 -F 3 < "../../../kernel_patches/experimental/susfs/susfs_dentry_checks.patch"
+          
           if [ "${{ inputs.android_version }}" = "android15" ] && [ "${{ inputs.kernel_version }}" = "6.6" ]; then
               if ! grep -qxF '#include <trace/hooks/fs.h>' ./fs/namespace.c; then
                   sed -i '/#include <trace\/hooks\/blk.h>/a #include <trace\/hooks\/fs.h>' ./fs/namespace.c
