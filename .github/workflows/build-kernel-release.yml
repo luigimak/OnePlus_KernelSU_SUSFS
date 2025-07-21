@@ -277,7 +277,7 @@ jobs:
       REPO_OWNER: ${{ github.repository_owner }}
       REPO_NAME: ${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_NAME: "*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v1.5.9 *TEST BUILD*"
+      RELEASE_NAME: "OnePlus Kernels With KernelSU Next & SUSFS v1.5.9"
       RELEASE_NOTES: |
         This release contains KernelSU Next and SUSFS v1.5.9
         
