@@ -59,6 +59,7 @@ runs:
     - name: Install Dependencies
       shell: bash
       run: |
+        : << "COMMENT2"
         sudo rm -f /var/lib/apt/lists/lock /var/lib/dpkg/lock
         sudo apt update -qq
         sudo DEBIAN_FRONTEND=noninteractive apt install -yq --no-install-recommends \
@@ -66,6 +67,7 @@ runs:
           build-essential flex bison libssl-dev \
           libncurses-dev liblz4-tool zlib1g-dev \
           libxml2-utils rsync unzip python3 python-is-python3
+        COMMENT2
 
     - name: Install Repo Tool
       shell: bash
