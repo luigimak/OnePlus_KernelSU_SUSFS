@@ -357,6 +357,7 @@ runs:
         cd "$ARTIFACTS_DIR"
         echo "$ANDROID_VERSION-$FULL_VERSION" > ${{ inputs.model }}.txt
         echo "ANDROID_VER=$ANDROID_VERSION" >> $GITHUB_ENV
+        echo "FULL_VER=$FULL_VERSION" >> $GITHUB_ENV
 
     - name: Run sed and perl Commands
       shell: bash
@@ -502,7 +503,7 @@ runs:
           cp "$GITHUB_WORKSPACE/kernel_patches/oneplus/hmbird/bins/"* ./tools/
           patch -F 3 < "$GITHUB_WORKSPACE/kernel_patches/oneplus/hmbird/ak3_hmbird_patch.patch"
         fi
-        ZIP_NAME="AnyKernel3_${{ inputs.model }}_${{ inputs.android_version }}-${{ inputs.kernel_version }}_Next_${{ env.KSUVER }}_SUSFS_${{ env.SUSVER }}.zip"
+        ZIP_NAME="AnyKernel3_${{ inputs.model }}_${{ inputs.android_version }}-${{ env.FULL_VER }}_Next_${{ env.KSUVER }}_SUSFS_${{ env.SUSVER }}.zip"
         ARTIFACTS_DIR="$CONFIG_DIR/artifacts"
         echo "Creating zip file $ZIP_NAME in $ARTIFACTS_DIR..."
         zip -r "$ARTIFACTS_DIR/$ZIP_NAME" ./*
