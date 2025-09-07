@@ -312,36 +312,36 @@ runs:
       run: |
         set -euo pipefail
         cd "$CONFIG/kernel_platform"
-        {
-          echo "CONFIG_TCP_CONG_ADVANCED=y"
-          echo "CONFIG_TCP_CONG_BBR=y"
-          echo "CONFIG_NET_SCH_FQ=y"
-          echo "CONFIG_NET_SCH_FQ_CODEL=y"
-        } >> common/arch/arm64/configs/gki_defconfig
+        cat >> common/arch/arm64/configs/gki_defconfig <<EOF
+        CONFIG_TCP_CONG_ADVANCED=y
+        CONFIG_TCP_CONG_BBR=y
+        CONFIG_NET_SCH_FQ=y
+        CONFIG_NET_SCH_FQ_CODEL=y
+        EOF
 
     - name: Add TTL Target Support
       shell: bash
       run: |
         set -euo pipefail
         cd "$CONFIG/kernel_platform"
-        {
-          echo "CONFIG_IP_NF_TARGET_TTL=y"
-          echo "CONFIG_IP6_NF_TARGET_HL=y"
-          echo "CONFIG_IP6_NF_MATCH_HL=y"
-        } >> common/arch/arm64/configs/gki_defconfig
+        cat >> common/arch/arm64/configs/gki_defconfig <<EOF
+        CONFIG_IP_NF_TARGET_TTL=y
+        CONFIG_IP6_NF_TARGET_HL=y
+        CONFIG_IP6_NF_MATCH_HL=y
+        EOF
 
     - name: Add Build based configs
       shell: bash
       run: |
         set -euo pipefail
         cd "$CONFIG/kernel_platform"
-        {
-          echo "CONFIG_LTO_CLANG_THIN=y"
-          echo "CONFIG_LTO_CLANG=y"
-          echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y"
-          echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3=n"
-          echo "CONFIG_OPTIMIZE_INLINING=y"
-        } >> common/arch/arm64/configs/gki_defconfig
+        cat >> common/arch/arm64/configs/gki_defconfig <<EOF
+        CONFIG_LTO_CLANG_THIN=y
+        CONFIG_LTO_CLANG=y
+        CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y
+        CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3=n
+        CONFIG_OPTIMIZE_INLINING=y
+        EOF
 
     - name: Save Build Metadata
       id: save_metadata
