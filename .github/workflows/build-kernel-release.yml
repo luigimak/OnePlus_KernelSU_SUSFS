@@ -20,30 +20,38 @@ on:
           - stable
           - next
         default: next
-      android12-5_10_susfs_branch:
-        description: "Choose SusFS Branch for android12-5.10"
+      optimize_level:
+        description: "Compiler optimization level"
+        required: true
+        type: choice
+        options:
+          - O2
+          - O3
+        default: O2
+      android12-5_10_susfs_branch_or_commit:
+        description: 'Enter SusFS Branch or commit hash for android12-5.10'
         type: string
-        default: "gki-android12-5.10"
-      android13-5_10_susfs_branch:
-        description: "Choose SusFS Branch for android13-5.10"
+        default: ''
+      android13-5_10_susfs_branch_or_commit:
+        description: 'Enter SusFS Branch or commit hash for android13-5.10'
         type: string
-        default: "gki-android13-5.10"
-      android13-5_15_susfs_branch:
-        description: "Choose SusFS Branch for android13-5.15"
+        default: ''
+      android13-5_15_susfs_branch_or_commit:
+        description: 'Enter SusFS Branch or commit hash for android13-5.15'
         type: string
-        default: "gki-android13-5.15"
-      android14-5_15_susfs_branch:
-        description: "Choose SusFS Branch for android14-5.15"
+        default: ''
+      android14-5_15_susfs_branch_or_commit:
+        description: 'Enter SusFS Branch or commit hash for android14-5.15'
         type: string
-        default: "gki-android14-5.15"
-      android14-6_1_susfs_branch:
-        description: "Choose SusFS Branch for android14-6.1"
+        default: ''
+      android14-6_1_susfs_branch_or_commit:
+        description: 'Enter SusFS Branch or commit hash for android14-6.1'
         type: string
-        default: "gki-android14-6.1"
-      android15-6_6_susfs_branch:
-        description: "Choose SusFS Branch for android15-6.6"
+        default: ''
+      android15-6_6_susfs_branch_or_commit:
+        description: 'Enter SusFS Branch or commit hash for android15-6.6'
         type: string
-        default: "gki-android15-6.6"
+        default: ''
 
 jobs:
   build-batch-1:
@@ -65,34 +73,32 @@ jobs:
         run: |
           KERNEL_STRING="${{ matrix.android_version }}-${{ matrix.kernel_version }}"
           
+          SUSFS_BRANCH=""
+
           case "$KERNEL_STRING" in
             "android12-5.10")
-              SUSFS_BRANCH="${{ inputs.android12-5_10_susfs_branch }}"
+              SUSFS_BRANCH="${{ inputs.android12-5_10_susfs_branch_or_commit }}"
               ;;
             "android13-5.10")
-              SUSFS_BRANCH="${{ inputs.android13-5_10_susfs_branch }}"
+              SUSFS_BRANCH="${{ inputs.android13-5_10_susfs_branch_or_commit }}"
               ;;
             "android13-5.15")
-              SUSFS_BRANCH="${{ inputs.android13-5_15_susfs_branch }}"
+              SUSFS_BRANCH="${{ inputs.android13-5_15_susfs_branch_or_commit }}"
               ;;
             "android14-5.15")
-              SUSFS_BRANCH="${{ inputs.android14-5_15_susfs_branch }}"
+              SUSFS_BRANCH="${{ inputs.android14-5_15_susfs_branch_or_commit }}"
               ;;
             "android14-6.1")
-              SUSFS_BRANCH="${{ inputs.android14-6_1_susfs_branch }}"
+              SUSFS_BRANCH="${{ inputs.android14-6_1_susfs_branch_or_commit }}"
               ;;
             "android15-6.6")
-              SUSFS_BRANCH="${{ inputs.android15-6_6_susfs_branch }}"
+              SUSFS_BRANCH="${{ inputs.android15-6_6_susfs_branch_or_commit }}"
               ;;
             *)
               echo "Invalid kernel version or unsupported: $KERNEL_STRING"
               exit 1
               ;;
           esac
-          
-          if [[ -z "$SUSFS_BRANCH" ]]; then
-            SUSFS_BRANCH="gki-${{ matrix.android_version }}-${{ matrix.kernel_version }}"
-          fi
           
           echo "susfs_branch=$SUSFS_BRANCH" >> $GITHUB_OUTPUT
 
@@ -106,10 +112,9 @@ jobs:
           soc: ${{ matrix.soc }}
           branch: ${{ matrix.branch }}
           manifest: ${{ matrix.manifest }}
-          android_version: ${{ matrix.android_version }}
-          kernel_version: ${{ matrix.kernel_version }}
           ksun_branch: ${{ inputs.ksun_branch }}
-          susfs_branch: ${{ steps.get-susfs-branch.outputs.susfs_branch }}
+          susfs_commit_hash_or_branch: ${{ steps.get-susfs-branch.outputs.susfs_branch }}
+          optimize_level: ${{ inputs.optimize_level }}
 
   trigger-release:
     needs:
