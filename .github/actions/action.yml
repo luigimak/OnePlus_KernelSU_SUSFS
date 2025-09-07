@@ -71,21 +71,6 @@ runs:
         fi
         echo "Input validation OK."
 
-    - name: Setup Base Environment
-      shell: bash
-      run: |
-        set -euo pipefail
-        # Derive a unique build directory name
-        CONFIG="${{ inputs.model }}_${{ inputs.android_version }}_${{ inputs.kernel_version }}"
-        echo "CONFIG=$CONFIG" >> "$GITHUB_ENV"
-        # Install repo tool if missing
-        REPO="/usr/local/bin/repo"
-        if [ ! -x "$REPO" ]; then
-          curl -s https://storage.googleapis.com/git-repo-downloads/repo -o "$REPO"
-          chmod +x "$REPO"
-        fi
-        echo "REPO=$REPO" >> "$GITHUB_ENV"
-
     - name: Install Minimal Dependencies
       shell: bash
       run: |
@@ -103,6 +88,21 @@ runs:
         echo "Work directory: $(pwd)"
         sudo rm -rf * || true
         sudo rm -rf .[^.]* || true
+
+    - name: Setup Base Environment
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Derive a unique build directory name
+        CONFIG="${{ inputs.model }}_${{ inputs.android_version }}_${{ inputs.kernel_version }}"
+        echo "CONFIG=$CONFIG" >> "$GITHUB_ENV"
+        # Install repo tool if missing
+        REPO="/usr/local/bin/repo"
+        if [ ! -x "$REPO" ]; then
+          curl -s https://storage.googleapis.com/git-repo-downloads/repo -o "$REPO"
+          chmod +x "$REPO"
+        fi
+        echo "REPO=$REPO" >> "$GITHUB_ENV"
 
     - name: Clone AnyKernel3 and Other Dependencies
       shell: bash
