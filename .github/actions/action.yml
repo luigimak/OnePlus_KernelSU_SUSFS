@@ -58,8 +58,8 @@ runs:
     - name: Install Minimal Dependencies
       shell: bash
       run: |
+        set -euo pipefail
         if false; then
-          set -euo pipefail
           echo "::group::Install deps"
           sudo apt-get -o Acquire::Retries=3 update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -70,8 +70,7 @@ runs:
           echo "::endgroup::"
         fi
         echo "Work directory: $(pwd)"
-        sudo rm -rf * || true
-        sudo rm -rf .[^.]* || true
+        rm -rf "$GITHUB_WORKSPACE/${{ inputs.model }}" || true
 
     - name: Setup Base Environment
       shell: bash
@@ -81,12 +80,20 @@ runs:
         CONFIG="${{ inputs.model }}"
         echo "CONFIG=$CONFIG" >> "$GITHUB_ENV"
         # Install repo tool if missing
-        REPO="/usr/local/bin/repo"
+        mkdir -p "$HOME/.local/bin"
+        REPO="$HOME/.local/bin/repo"
         if [ ! -x "$REPO" ]; then
-          curl -s https://storage.googleapis.com/git-repo-downloads/repo -o "$REPO"
-          chmod +x "$REPO"
+          echo "Downloading repo tool..."
+          tmpfile="$(mktemp)"
+          if ! curl -fL https://storage.googleapis.com/git-repo-downloads/repo -o "$tmpfile"; then
+            echo "Failed to download repo tool"; exit 1
+          fi
+          install -m 0755 "$tmpfile" "$REPO"
+          rm -f "$tmpfile"
         fi
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
         echo "REPO=$REPO" >> "$GITHUB_ENV"
+        echo "Repo tool installed at: $REPO"
 
     - name: Initialize and Sync Kernel Source
       shell: bash
@@ -297,7 +304,7 @@ runs:
         cd "$CONFIG/kernel_platform/common"
         cp ../../../kernel_patches/69_hide_stuff.patch ./
         patch -p1 -F 3 < 69_hide_stuff.patch
-        
+
     - name: Add KernelSU-Next and SUSFS Configuration Settings
       shell: bash
       run: |
@@ -519,7 +526,7 @@ runs:
     
         # Output for later steps (optional)
         echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
-    
+
     - name: Final Build Summary
       shell: bash
       run: |
@@ -545,12 +552,12 @@ runs:
           echo "- Kernel Version: ${{ steps.save_metadata.outputs.kernel_version }}"
           echo "- Kernel Uname: ${{ env.KERNEL_UNAME }}"
           echo "- KSU Version: ${KSUVER:-unknown}"
-          echo "- SUSFS Version: ${SUSVER:-unknown }}"
+          echo "- SUSFS Version: ${SUSVER:-unknown}"
           echo "- Optimization: ${{ inputs.optimize_level }}"
           echo "- Image SHA256: ${{ steps.collect_stats.outputs.image_sha256 }}"
           echo "- Warnings: ${{ steps.collect_stats.outputs.warnings }}"
         } >> "$GITHUB_STEP_SUMMARY"
-    
+
     - name: Upload Artifacts
       if: success() && steps.create_zip.conclusion == 'success'
       uses: actions/upload-artifact@v4
