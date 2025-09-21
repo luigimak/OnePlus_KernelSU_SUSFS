@@ -450,7 +450,7 @@ jobs:
           - [+] Futile Maphide for jit-zygote-cache Detections
           - [+] Magic Mount Support
           - [+] Ptrace message leak fix for kernels < 5.16
-          - [+] Manual Hooks [scope_min_manual_hooks_v1.4]
+          - [+] Manual Hooks [scope_min_manual_hooks_v1.5]
           - [+] CONFIG_TMPFS_XATTR Support [Mountify Support]
           - [+] BBR v1 Support
           - [+] HMBIRD scx support for OnePlus 13
