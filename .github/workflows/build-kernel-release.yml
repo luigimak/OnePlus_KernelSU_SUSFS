@@ -421,8 +421,11 @@ jobs:
           Module: 
           -> https://github.com/sidex15/ksu_module_susfs  
           
-          Non-Official Managers:
+          Official Managers:
           -> https://github.com/KernelSU-Next/KernelSU-Next  
+          
+          Non-Official Managers:
+          -> https://github.com/WildKernels/Wild_KSU
           
           ### Built Devices
           
@@ -443,7 +446,7 @@ jobs:
           cat << 'EOF' >> release_notes.md
           
           ### Features
-          - [+] KernelSU-Next
+          - [+] KernelSU-Next / WildKSU Manager Support
           - [+] SUSFS v1.5.9
           - [+] Wireguard Support
           - [+] Magic Mount Support
