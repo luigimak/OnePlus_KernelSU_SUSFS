@@ -446,8 +446,6 @@ jobs:
           - [+] KernelSU-Next
           - [+] SUSFS v1.5.9
           - [+] Wireguard Support
-          - [+] Maphide LineageOS Detections
-          - [+] Futile Maphide for jit-zygote-cache Detections
           - [+] Magic Mount Support
           - [+] Ptrace message leak fix for kernels < 5.16
           - [+] Manual Hooks [scope_min_manual_hooks_v1.5]
