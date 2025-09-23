@@ -19,7 +19,8 @@ on:
         options:
           - stable
           - next
-        default: next
+          - v1.1.0
+        default: v1.1.0
       optimize_level:
         description: "Compiler optimization level"
         required: true
