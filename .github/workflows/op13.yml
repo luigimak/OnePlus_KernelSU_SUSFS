@@ -98,7 +98,7 @@ jobs:
               exit 1
               ;;
           esac
-
+          
           echo "susfs_branch=$SUSFS_BRANCH" >> $GITHUB_OUTPUT
 
       - name: Checkout Code
@@ -163,8 +163,11 @@ jobs:
           Module: 
           -> https://github.com/sidex15/ksu_module_susfs  
           
-          Non-Official Managers:
+          Official Managers:
           -> https://github.com/KernelSU-Next/KernelSU-Next  
+          
+          Non-Official Managers:
+          -> https://github.com/WildKernels/Wild_KSU
           
           ### Built Devices
           
@@ -185,11 +188,9 @@ jobs:
           cat << 'EOF' >> release_notes.md
           
           ### Features
-          - [+] KernelSU-Next
+          - [+] KernelSU-Next / WildKSU Manager Support
           - [+] SUSFS v1.5.9
           - [+] Wireguard Support
-          - [+] Maphide LineageOS Detections
-          - [+] Futile Maphide for jit-zygote-cache Detections
           - [+] Magic Mount Support
           - [+] Ptrace message leak fix for kernels < 5.16
           - [+] Manual Hooks [scope_min_manual_hooks_v1.4]

@@ -451,7 +451,7 @@ jobs:
           - [+] Wireguard Support
           - [+] Magic Mount Support
           - [+] Ptrace message leak fix for kernels < 5.16
-          - [+] Manual Hooks [scope_min_manual_hooks_v1.5]
+          - [+] Manual Hooks [scope_min_manual_hooks_v1.4]
           - [+] CONFIG_TMPFS_XATTR Support [Mountify Support]
           - [+] BBR v1 Support
           - [+] HMBIRD scx support for OnePlus 13

@@ -248,9 +248,9 @@ runs:
             cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_ksud.c.patch" ./
             patch -p1 --forward --fuzz=3 < fix_ksud.c.patch
             ;;
-          "v1.5.9")
-            cp ../../../susfs4ksu/kernel_patches/KernelSU-Next/10_enable_susfs_for_ksuN_v111.patch ./
-            patch -p1 --forward < 10_enable_susfs_for_ksuN_v111.patch  || true
+          "v1.5.10")
+            cp ../../../susfs4ksu/kernel_patches/KernelSU-Next/enable_susfs_1.5.10_for_ksuN_1.1.1.patch ./
+            patch -p1 --forward < enable_susfs_1.5.10_for_ksuN_1.1.1.patch  || true
             ;;
           *)
             echo "Invalid version: $susfs_version"
