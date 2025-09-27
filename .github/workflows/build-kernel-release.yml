@@ -66,7 +66,13 @@ jobs:
             manifest: oneplus_11_v.xml
             android_version: android13
             kernel_version: '5.15'
-          - model: OP13
+          - model: OP13_GLO
+            soc: sun
+            branch: oneplus/sm8750
+            manifest: oneplus_13_global.xml
+            android_version: android15
+            kernel_version: '6.6'
+          - model: OP13_CN
             soc: sun
             branch: oneplus/sm8750
             manifest: oneplus_13.xml
@@ -447,7 +453,7 @@ jobs:
           
           ### Features
           - [+] KernelSU-Next / WildKSU Manager Support
-          - [+] SUSFS v1.5.9
+          - [+] SUSFS v1.5.10
           - [+] Wireguard Support
           - [+] Magic Mount Support
           - [+] Ptrace message leak fix for kernels < 5.16
