@@ -49,11 +49,51 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        echo "::group::Validate inputs"
         model='${{ inputs.model }}'
-        if [[ -z "$model" ]]; then
-          echo "Empty model not allowed"; exit 1
+        soc='${{ inputs.soc }}'
+        branch='${{ inputs.branch }}'
+        manifest='${{ inputs.manifest }}'
+        optimize='${{ inputs.optimize_level }}'
+    
+        # Non-empty checks
+        [[ -n "$model" ]] || { echo "Input 'model' cannot be empty"; exit 1; }
+        [[ -n "$soc" ]] || { echo "Input 'soc' cannot be empty"; exit 1; }
+        [[ -n "$branch" ]] || { echo "Input 'branch' cannot be empty"; exit 1; }
+        [[ -n "$manifest" ]] || { echo "Input 'manifest' cannot be empty"; exit 1; }
+    
+        # Basic format checks
+        # soc: allow letters, digits, underscores, dashes (e.g., sm8650)
+        if ! [[ "$soc" =~ ^[A-Za-z0-9_-]+$ ]]; then
+          echo "Input 'soc' contains invalid characters. Allowed: letters, digits, underscore, dash"; exit 1
+        fi    
+        # branch: allow common ref patterns; spaces not allowed
+        if ! [[ "$branch" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+          echo "Input 'branch' contains invalid characters. Allowed: letters, digits, ., _, -, /"; exit 1
+        fi    
+        # manifest: either HTTPS URL ending with .xml, or a filename ending with .xml (no spaces)
+        if [[ "$manifest" == http*://* ]]; then
+          if ! [[ "$manifest" =~ ^https:// ]]; then
+            echo "Manifest URL must be HTTPS"; exit 1
+          fi
+          if ! [[ "$manifest" =~ \.xml($|\?) ]]; then
+            echo "Manifest URL should point to an XML file (.xml)"; exit 1
+          fi
+        else
+          if ! [[ "$manifest" =~ \.xml$ ]]; then
+            echo "Manifest filename must end with .xml"; exit 1
+          fi
+          if [[ "$manifest" =~ [[:space:]] ]]; then
+            echo "Manifest filename cannot contain spaces"; exit 1
+          fi
         fi
+        # Optimize level validation
+        case "$optimize" in
+          O2|O3) ;;
+          *) echo "optimize_level must be O2 or O3; got '$optimize'"; exit 1 ;;
+        esac
         echo "Input validation OK."
+        echo "::endgroup::"
 
     - name: Install Minimal Dependencies
       shell: bash
@@ -178,6 +218,8 @@ runs:
         cd susfs4ksu
         if git rev-parse --verify "origin/$SUSFS_BRANCH" >/dev/null 2>&1 || git rev-parse --verify "$SUSFS_BRANCH" >/dev/null 2>&1; then
           git checkout "$SUSFS_BRANCH"
+          SUSFS_COMMIT_SHA=$(git rev-parse HEAD)
+          echo "SUSFS_COMMIT_SHA=$SUSFS_COMMIT_SHA" >> $GITHUB_ENV
         else
           echo "Error: SUSFS branch or ref '$SUSFS_BRANCH' not found."
           exit 1
@@ -214,6 +256,10 @@ runs:
           curl --fail --location --proto '=https' -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s "${{ inputs.ksun_branch }}"
         fi
         git submodule update --init --recursive
+        cd KernelSU-Next
+        KSUN_COMMIT_SHA=$(git rev-parse HEAD)
+        echo "KSUN_COMMIT_SHA=$KSUN_COMMIT_SHA" >> $GITHUB_ENV
+        cd ..
 
     - name: Apply SUSFS Patches
       shell: bash
@@ -251,7 +297,7 @@ runs:
             cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_ksud.c.patch" ./
             patch -p1 --forward --fuzz=3 < fix_ksud.c.patch
             ;;
-          "v1.5.9"|"v1.5.10"|"v1.5.11")
+          "v1.5.9"|"v1.5.10"|"v1.5.11"|"v1.5.12")
             cp ../../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
             patch -p1 --forward < 10_enable_susfs_for_ksu.patch  || true
             for file in $(find ./kernel -maxdepth 2 -name "*.rej" -printf "%f\n" | cut -d'.' -f1); do
@@ -281,7 +327,7 @@ runs:
         else
           echo "Kernel >= $MIN_VERSION, skipping ptrace patch"
         fi
-        if [ "${{ inputs.model }}" == "OPAce5Pro" ] || [ "${{ inputs.model }}" == "OP13-CN" || [ "${{ inputs.model }}" == "OP13-GLO" ]; then
+        if [ "${{ inputs.model }}" == "OPAce5Pro" ] || [ "${{ inputs.model }}" == "OP13-CN" ] || [ "${{ inputs.model }}" == "OP13-GLO" ]; then
           echo "Patching hmbird!"
           echo 'obj-y += hmbird_patch.o' >> ./drivers/Makefile
           patch -p1 -F 3 < "../../../kernel_patches/oneplus/hmbird/hmbird_kernel_patch.patch"
@@ -299,6 +345,15 @@ runs:
         set -euo pipefail
         cd "$CONFIG/kernel_platform/common"
         patch -p1 < ../../../kernel_patches/next/scope_min_manual_hooks_v1.4.patch
+
+    - name: Apply xx_maps patch (untill sus_maps is released)
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd "$CONFIG/kernel_platform/common"
+        patch -p1 --forward < "../../../kernel_patches/maps/xx_maps_sus_kernel.patch"
+        cd "../KernelSU-Next"
+        patch -p1 --forward < "../../../kernel_patches/maps/xx_maps_ksu.patch"
 
     - name: Add KernelSU-Next and SUSFS Configuration Settings
       shell: bash
@@ -414,12 +469,19 @@ runs:
 
     - name: Build Kernel
       shell: bash
+      env:
+        PYTHONWARNINGS: "ignore:invalid escape sequence"
       run: |
         set -euo pipefail
+        echo "::group::Build kernel"
         KERNEL_PATH="$GITHUB_WORKSPACE/$CONFIG/kernel_platform"
         COMMON="$KERNEL_PATH/common"
         cd "$COMMON"
         : > "$COMMON/.scmversion"
+        
+        # Ensure Python warnings are suppressed for scripts invoked by make
+        export PYTHONWARNINGS="${PYTHONWARNINGS}"
+        
         if [ -n "${CLANG_BIN_PATH:-}" ] && [ -x "${CLANG_BIN_PATH}/clang" ]; then
           export PATH="${CLANG_BIN_PATH}:$PATH"
         fi
@@ -432,30 +494,43 @@ runs:
         OUT=out
         mkdir -p "$OUT"
         make O="$OUT" gki_defconfig
+        
+        # LOCALVERSION branding
         if [ -n "${CUSTOM_LOCALVERSION:-}" ]; then
           scripts/config --file "$OUT/.config" --set-str LOCALVERSION "${CUSTOM_LOCALVERSION}"
           scripts/config --file "$OUT/.config" -d LOCALVERSION_AUTO || true
           sed -i 's/scm_version="$(scm_version --short)"/scm_version=""/' scripts/setlocalversion
         fi
+        
+        # Optimize level config and flags
         if [ "${{ inputs.optimize_level }}" = "O3" ]; then
           scripts/config --file "$OUT/.config" -d CC_OPTIMIZE_FOR_PERFORMANCE
           scripts/config --file "$OUT/.config" -e CC_OPTIMIZE_FOR_PERFORMANCE_O3
-          export KCFLAGS="-Wno-error -pipe -O3 -fno-stack-protector"
+          KCFLAGS_EXTRA="-O3"
         else
           scripts/config --file "$OUT/.config" -e CC_OPTIMIZE_FOR_PERFORMANCE
           scripts/config --file "$OUT/.config" -d CC_OPTIMIZE_FOR_PERFORMANCE_O3
-          export KCFLAGS="-Wno-error -pipe -O2 -fno-stack-protector"
+          KCFLAGS_EXTRA="-O2"
         fi
-        export KCPPFLAGS="-DCONFIG_OPTIMIZE_INLINING"
+        
+        # Consistent flags; include -pipe and disable stack protector
+        KCFLAGS="-Wno-error -pipe -fno-stack-protector ${KCFLAGS_EXTRA}"
+        KCPPFLAGS="-DCONFIG_OPTIMIZE_INLINING"
+        
+        # Regenerate defaults after config edits
         make O="$OUT" olddefconfig
+        
         echo "Starting build with $(nproc --all) threads..."
         set -o pipefail
-        make -j"$(nproc --all)" O="$OUT" 2>&1 | tee build.log
+        make -j"$(nproc --all)" O="$OUT" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" 2>&1 | tee build.log
+        
         IMG="$OUT/arch/arm64/boot/Image"
         if [ ! -f "$IMG" ]; then
-          echo "Kernel Image missing"; exit 1
+          echo "Kernel Image missing"
+          exit 1
         fi
         sha256sum "$IMG" | tee "$OUT/Image.sha256"
+        echo "::endgroup::"
 
     - name: Collect Build Stats / Validate Image
       id: collect_stats
@@ -504,7 +579,7 @@ runs:
         cd "$GITHUB_WORKSPACE/AnyKernel3"
     
         # Optional hmbird patch logic
-        if [ "${{ inputs.model }}" == "OPAce5Pro" ] || [ "${{ inputs.model }}" == "OP13-CN" || [ "${{ inputs.model }}" == "OP13-GLO" ]; then
+        if [ "${{ inputs.model }}" == "OPAce5Pro" ] || [ "${{ inputs.model }}" == "OP13-CN" ] || [ "${{ inputs.model }}" == "OP13-GLO" ]; then
           cp "$GITHUB_WORKSPACE/kernel_patches/oneplus/hmbird/bins/"* ./tools/ 2>/dev/null || true
           patch -F 3 < "$GITHUB_WORKSPACE/kernel_patches/oneplus/hmbird/ak3_hmbird_patch.patch"
         fi
@@ -532,8 +607,10 @@ runs:
           echo "Kernel base: ${{ env.KERNEL_VER }}"
           echo "Kernel full: ${{ env.KERNEL_FULL_VER }}"
           echo "Kernel Uname: ${{ env.KERNEL_UNAME }}"
-          echo "KSU Version: ${KSUVER:-unknown}"
+          echo "KSUN Version: ${KSUVER:-unknown}"
+          echo "KSUN commit SHA: ${{ env.KSUN_COMMIT_SHA }}"
           echo "SUSFS Version: ${SUSVER:-unknown}"
+          echo "SUSFS commit SHA: ${{ env.SUSFS_COMMIT_SHA }}"
           echo "Optimization: ${{ inputs.optimize_level }}"
           echo "Image SHA256: ${{ steps.collect_stats.outputs.image_sha256 }}"
           echo "Compiler: ${CLANG_VERSION:-unknown}"
@@ -546,8 +623,10 @@ runs:
           echo "- Android: ${{ env.ANDROID_VER }}"
           echo "- Kernel Version: ${{ steps.save_metadata.outputs.kernel_version }}"
           echo "- Kernel Uname: ${{ env.KERNEL_UNAME }}"
-          echo "- KSU Version: ${KSUVER:-unknown}"
+          echo "- KSUN Version: ${KSUVER:-unknown}"
+          echo "- KSUN commit SHA: [${{ env.KSUN_COMMIT_SHA }}](https://github.com/KernelSU-Next/KernelSU-Next/commit/${{ env.KSUN_COMMIT_SHA }})"
           echo "- SUSFS Version: ${SUSVER:-unknown}"
+          echo "- SUSFS commit SHA: [${{ env.SUSFS_COMMIT_SHA }}](https://gitlab.com/simonpunk/susfs4ksu/-/commit/${{ env.SUSFS_COMMIT_SHA }})"
           echo "- Optimization: ${{ inputs.optimize_level }}"
           echo "- Image SHA256: ${{ steps.collect_stats.outputs.image_sha256 }}"
           echo "- Warnings Count: ${{ steps.collect_stats.outputs.warnings_count }}"
