@@ -349,11 +349,14 @@ runs:
     - name: Apply xx_maps patch (untill sus_maps is released)
       shell: bash
       run: |
-        set -euo pipefail
-        cd "$CONFIG/kernel_platform/common"
-        patch -p1 --forward < "../../../kernel_patches/maps/xx_maps_sus_kernel.patch"
-        cd "../KernelSU-Next"
-        patch -p1 --forward < "../../../kernel_patches/maps/xx_maps_ksu.patch"
+        cd "$CONFIG"
+        git clone https://github.com/fatalcoder524/map_spoof.git
+        cd "kernel_platform/common"
+        patch -p1 --forward < "../../map_spoof/sus_kernel.diff"
+        cp -r "../../map_spoof/map_spoof" drivers
+        grep -q "map_spoof" drivers/Makefile || printf "\nobj-\$(CONFIG_MAP_SPOOF) += map_spoof/\n" >> drivers/Makefile && echo "[+] Modified Makefile."
+        grep -q "source \"drivers/map_spoof/Kconfig\"" drivers/Kconfig || sed -i "/endmenu/i\source \"drivers/map_spoof/Kconfig\"" drivers/Kconfig && echo "[+] Modified Kconfig."
+        echo "CONFIG_MAP_SPOOF=y" >> arch/arm64/configs/gki_defconfig
 
     - name: Add KernelSU-Next and SUSFS Configuration Settings
       shell: bash
@@ -573,27 +576,31 @@ runs:
           echo "ERROR: Built Image not found"
           exit 1
         fi
-    
+      
         # Put Image into AnyKernel3
         cp "$IMAGE_PATH" "$GITHUB_WORKSPACE/AnyKernel3/Image"
         cd "$GITHUB_WORKSPACE/AnyKernel3"
-    
+      
         # Optional hmbird patch logic
         if [ "${{ inputs.model }}" == "OPAce5Pro" ] || [ "${{ inputs.model }}" == "OP13-CN" ] || [ "${{ inputs.model }}" == "OP13-GLO" ]; then
           cp "$GITHUB_WORKSPACE/kernel_patches/oneplus/hmbird/bins/"* ./tools/ 2>/dev/null || true
           patch -F 3 < "$GITHUB_WORKSPACE/kernel_patches/oneplus/hmbird/ak3_hmbird_patch.patch"
         fi
-    
+      
+        cp "$CONFIG_DIR/map_spoof/binary/map_spoof" .
+        sed -i '/## end boot install/i cp map_spoof /data/adb/ksu/bin/map_spoof' anykernel.sh
+        sed -i '/## end boot install/i chmod +x /data/adb/ksu/bin/map_spoof' anykernel.sh
+      
         ZIP_NAME="AnyKernel3_${{ inputs.model }}_${{ env.KERNEL_FULL_VER }}_Next_${KSUVER}_${SUSVER}.zip"
         ARTIFACTS_DIR="$CONFIG_DIR/artifacts"
         mkdir -p "$ARTIFACTS_DIR"
-    
+      
         echo "Creating flashable zip: $ZIP_NAME"
         ( cd "$GITHUB_WORKSPACE/AnyKernel3" && zip -r "$ARTIFACTS_DIR/$ZIP_NAME" ./* >/dev/null )
-    
+      
         # Keep only the flashable zip and the model metadata file (assumed already created earlier)
         find "$ARTIFACTS_DIR" -maxdepth 1 -type f ! -name "$ZIP_NAME" ! -name "${{ inputs.model }}.txt" -delete
-    
+      
         # Output for later steps (optional)
         echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
 
