@@ -28,7 +28,6 @@ on:
           - OP13-PJZ
           - OP13r
           - OP13S
-          - OP13T
           - OP12
           - OP12r
           - OP11
@@ -39,17 +38,9 @@ on:
           - OP-NORD-4
           - OP-NORD-4-CE
           - OP-NORD-CE4-LITE
-          - OPAce5Pro
-          - OP-ACE-5
-          - OP-ACE-3-PRO
-          - OP-ACE-3V
-          - OP-ACE-2-PRO
-          - OP-ACE-2
           - OP-OPEN
           - OP-PAD-3
-          - OP-PAD-2-PRO
           - OP-PAD-2
-          - OP-PAD-PRO
         default: ALL
       ksun_branch:
         description: 'Enter KernelSU Next Branch or commit hash (blank for stable tag)'
@@ -210,32 +201,12 @@ jobs:
       REPO_NAME: ${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       RELEASE_NAME: '*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v1.5.12 *TEST BUILD*'
-      RELEASE_NOTES: |
-        This release contains KernelSU Next and SUSFS v1.5.12
-
-        Module: 
-        -> https://github.com/sidex15/ksu_module_susfs
-
-        Non-Official Managers:
-        -> https://github.com/KernelSU-Next/KernelSU-Next
-
-        Features:
-        [+] KernelSU-Next / WildKSU Manager Support
-        [+] SUSFS v1.5.12
-        [+] Wireguard Support
-        [+] Magic Mount Support
-        [+] Ptrace message leak fix for kernels < 5.16
-        [+] Manual Hooks [scope_min_manual_hooks_v1.4]
-        [+] CONFIG_TMPFS_XATTR Support [Mountify Support]
-        [+] BBR v1 Support.
-        [+] HMBIRD scx support for OnePlus 13 & OnePlus Ace 5 Pro.
-        [+] Baseband Guard Support (BBG).
-        [+] xx_maps hide.
-
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
       - name: Generate and Create New Tag
         run: |
           BASE_TAG="v1.5.12-r0"
@@ -256,30 +227,71 @@ jobs:
         with:
           path: ./downloaded-artifacts
 
+      - name: Generate Device List and Final Release Notes
+        id: generate-notes
+        run: |
+          echo "=== Start building the release notes ==="
+          cat << EOF > release_notes.md
+          This release contains KernelSU Next and SUSFS v1.5.12
+          
+          Module: 
+          -> https://github.com/sidex15/ksu_module_susfs  
+          
+          Official Managers:
+          -> https://github.com/KernelSU-Next/KernelSU-Next  
+          
+          Non-Official Managers:
+          -> https://github.com/WildKernels/Wild_KSU
+          
+          ### Built Devices
+          
+          | Model | Kernel Version |
+          |-------|----------------|
+          EOF
+          
+          # Generate table rows
+          for file in $(find downloaded-artifacts -name "*.txt" -type f | sort); do
+            if [ -f "$file" ]; then
+              model=$(basename "$file" .txt)
+              version=$(cat "$file")
+              printf "| %-12s | %-16s |\n" "$model" "$version" >> release_notes.md
+            fi
+          done
+          
+          # Add features and finalize
+          cat << 'EOF' >> release_notes.md
+          
+          ### Features
+          - [+] KernelSU-Next / WildKSU Manager Support
+          - [+] SUSFS v1.5.12
+          - [+] Wireguard Support
+          - [+] Magic Mount Support
+          - [+] Ptrace message leak fix for kernels < 5.16
+          - [+] Manual Hooks [scope_min_manual_hooks_v1.4]
+          - [+] CONFIG_TMPFS_XATTR Support [Mountify Support]
+          - [+] BBR v1 Support
+          - [+] HMBIRD scx support for OnePlus 13
+          - [+] Baseband Guard Support (BBG).
+          - [+] xx_maps hide.
+          EOF
+          
+          # Output for debugging
+          echo "--- Final Release Notes ---"
+          cat release_notes.md
+
       - name: Create GitHub Release
-        uses: actions/create-release@v1
-        with:
-          tag_name: ${{ env.NEW_TAG }}
-          prerelease: true
-          release_name: ${{ env.RELEASE_NAME }}
-          body: ${{ env.RELEASE_NOTES }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ env.NEW_TAG }}" \
+            --repo "${{ env.REPO_OWNER }}/${{ env.REPO_NAME }}" \
+            --title "${{ env.RELEASE_NAME }}" \
+            --notes-file release_notes.md \
+            --prerelease
 
       - name: Upload Release Assets Dynamically
         run: |
-          for file in ./downloaded-artifacts/kernel-*/*; do
-              if [ -d "$file" ]; then
-                  continue
-              fi
+          for file in ./downloaded-artifacts/*/*.zip; do
+            if [ -f "$file" ]; then
               echo "Uploading $file..."
-              gh release upload ${{ env.NEW_TAG }} "$file"
+              gh release upload "${{ env.NEW_TAG }}" "$file" --clobber
+            fi
           done
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NEW_TAG: ${{ env.NEW_TAG }}
-
-      - name: Display Files Uploaded
-        run: |
-          echo "GitHub release created with the following files:"
-          ls ./downloaded-artifacts/**/*
