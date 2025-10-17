@@ -99,14 +99,18 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        echo "::group::Install deps"
-        sudo apt-get -o Acquire::Retries=3 update -qq
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-          git curl ca-certificates build-essential clang lld flex bison \
-          libelf-dev libssl-dev libncurses-dev zlib1g-dev liblz4-tool \
-          libxml2-utils rsync unzip dwarves file python3
-        sudo apt-get clean
-        echo "::endgroup::"
+        if false; then
+          echo "::group::Install deps"
+          sudo apt-get -o Acquire::Retries=3 update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            git curl ca-certificates build-essential clang lld flex bison \
+            libelf-dev libssl-dev libncurses-dev zlib1g-dev liblz4-tool \
+            libxml2-utils rsync unzip dwarves file python3
+          sudo apt-get clean
+          echo "::endgroup::"
+        fi
+        echo "Work directory: $(pwd)"
+        rm -rf "$GITHUB_WORKSPACE/${{ inputs.model }}" || true
 
     - name: Setup Base Environment
       shell: bash
@@ -116,12 +120,20 @@ runs:
         CONFIG="${{ inputs.model }}"
         echo "CONFIG=$CONFIG" >> "$GITHUB_ENV"
         # Install repo tool if missing
-        REPO="/usr/local/bin/repo"
+        mkdir -p "$HOME/.local/bin"
+        REPO="$HOME/.local/bin/repo"
         if [ ! -x "$REPO" ]; then
-          curl -s https://storage.googleapis.com/git-repo-downloads/repo -o "$REPO"
-          chmod +x "$REPO"
+          echo "Downloading repo tool..."
+          tmpfile="$(mktemp)"
+          if ! curl -fL https://storage.googleapis.com/git-repo-downloads/repo -o "$tmpfile"; then
+            echo "Failed to download repo tool"; exit 1
+          fi
+          install -m 0755 "$tmpfile" "$REPO"
+          rm -f "$tmpfile"
         fi
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
         echo "REPO=$REPO" >> "$GITHUB_ENV"
+        echo "Repo tool installed at: $REPO"
 
     - name: Initialize and Sync Kernel Source
       shell: bash
@@ -522,7 +534,7 @@ runs:
           exit 1
         fi
         sha256sum "$IMG" | tee "$OUT/Image.sha256"
-        echo "::endgroup::"          
+        echo "::endgroup::"
 
     - name: Collect Build Stats / Validate Image
       id: collect_stats
@@ -565,31 +577,31 @@ runs:
           echo "ERROR: Built Image not found"
           exit 1
         fi
-    
+      
         # Put Image into AnyKernel3
         cp "$IMAGE_PATH" "$GITHUB_WORKSPACE/AnyKernel3/Image"
         cd "$GITHUB_WORKSPACE/AnyKernel3"
-    
+      
         # Optional hmbird patch logic
         if [ "${{ inputs.model }}" == "OPAce5Pro" ] || [ "${{ inputs.model }}" == "OP13-CN" ] || [ "${{ inputs.model }}" == "OP13-GLO" ]; then
           cp "$GITHUB_WORKSPACE/kernel_patches/oneplus/hmbird/bins/"* ./tools/ 2>/dev/null || true
           patch -F 3 < "$GITHUB_WORKSPACE/kernel_patches/oneplus/hmbird/ak3_hmbird_patch.patch"
         fi
-        
+      
         cp "$CONFIG_DIR/map_spoof/binary/map_spoof" .
         sed -i '/## end boot install/i cp map_spoof /data/adb/ksu/bin/map_spoof' anykernel.sh
         sed -i '/## end boot install/i chmod +x /data/adb/ksu/bin/map_spoof' anykernel.sh
-    
+      
         ZIP_NAME="AnyKernel3_${{ inputs.model }}_${{ env.KERNEL_FULL_VER }}_Next_${KSUVER}_${SUSVER}.zip"
         ARTIFACTS_DIR="$CONFIG_DIR/artifacts"
         mkdir -p "$ARTIFACTS_DIR"
-    
+      
         echo "Creating flashable zip: $ZIP_NAME"
         ( cd "$GITHUB_WORKSPACE/AnyKernel3" && zip -r "$ARTIFACTS_DIR/$ZIP_NAME" ./* >/dev/null )
-    
+      
         # Keep only the flashable zip and the model metadata file (assumed already created earlier)
         find "$ARTIFACTS_DIR" -maxdepth 1 -type f ! -name "$ZIP_NAME" ! -name "${{ inputs.model }}.txt" -delete
-    
+      
         # Output for later steps (optional)
         echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
 
