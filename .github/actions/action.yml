@@ -346,19 +346,6 @@ runs:
         cd "$CONFIG/kernel_platform/common"
         patch -p1 < ../../../kernel_patches/next/scope_min_manual_hooks_v1.4.patch
 
-    - name: Apply xx_maps patch (untill sus_maps is released)
-      shell: bash
-      run: |
-        set -euo pipefail
-        cd "$CONFIG"
-        git clone https://github.com/fatalcoder524/map_spoof.git
-        cd "kernel_platform/common"
-        patch -p1 --forward < "../../map_spoof/sus_kernel.diff"
-        cp -r "../../map_spoof/map_spoof" drivers
-        grep -q "map_spoof" drivers/Makefile || printf "\nobj-\$(CONFIG_MAP_SPOOF) += map_spoof/\n" >> drivers/Makefile && echo "[+] Modified Makefile."
-        grep -q "source \"drivers/map_spoof/Kconfig\"" drivers/Kconfig || sed -i "/endmenu/i\source \"drivers/map_spoof/Kconfig\"" drivers/Kconfig && echo "[+] Modified Kconfig."
-        echo "CONFIG_MAP_SPOOF=y" >> arch/arm64/configs/gki_defconfig
-
     - name: Add KernelSU-Next and SUSFS Configuration Settings
       shell: bash
       run: |
