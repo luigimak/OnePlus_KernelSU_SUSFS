@@ -87,8 +87,10 @@ jobs:
       - name: Checkout Code (to access configs/)
         uses: actions/checkout@v4
         with:
+          clean: true
           sparse-checkout: |
             configs/
+            .github/actions/
           sparse-checkout-cone-mode: false
 
       - name: Setup OnePlus Model
