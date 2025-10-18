@@ -349,7 +349,7 @@ runs:
         else
           echo "Kernel >= $MIN_VERSION, skipping ptrace patch"
         fi
-        if [ "${{ inputs.model }}" == "OPAce5Pro" ] || [ "${{ inputs.model }}" == "OP13-PJZ" ] || [ "${{ inputs.model }}" == "OP13-CPH" ]; then
+        if [ "${{ inputs.model }}" == "OP-ACE-5-PRO" ] || [ "${{ inputs.model }}" == "OP13-PJZ" ] || [ "${{ inputs.model }}" == "OP13-CPH" ]; then
           echo "Patching hmbird!"
           echo 'obj-y += hmbird_patch.o' >> ./drivers/Makefile
           patch -p1 -F 3 < "../../../kernel_patches/oneplus/hmbird/hmbird_kernel_patch.patch"
@@ -358,7 +358,7 @@ runs:
           rm -rf ext.c ext.h build_policy.c slim.h slim_sysctl.c
           patch -p1 -F 3 < "../../../../../kernel_patches/oneplus/hmbird/hmbird_files_patch.patch"
         else
-          echo "Not OPAce5Pro / OP13-PJZ / OP13-CPH , skipping fengchi patch"
+          echo "Not OP-ACE-5-PRO / OP13-PJZ / OP13-CPH , skipping fengchi patch"
         fi
 
     - name: Apply KSUN Hooks
@@ -593,7 +593,7 @@ runs:
         cd "$GITHUB_WORKSPACE/AnyKernel3"
     
         # Optional hmbird patch logic
-        if [ "${{ inputs.model }}" == "OPAce5Pro" ] || [ "${{ inputs.model }}" == "OP13-PJZ" ] || [ "${{ inputs.model }}" == "OP13-CPH" ]; then
+        if [ "${{ inputs.model }}" == "OP-ACE-5-PRO" ] || [ "${{ inputs.model }}" == "OP13-PJZ" ] || [ "${{ inputs.model }}" == "OP13-CPH" ]; then
           cp "$GITHUB_WORKSPACE/kernel_patches/oneplus/hmbird/bins/"* ./tools/ 2>/dev/null || true
           patch -F 3 < "$GITHUB_WORKSPACE/kernel_patches/oneplus/hmbird/ak3_hmbird_patch.patch"
         fi
