@@ -576,10 +576,6 @@ runs:
           patch -F 3 < "$GITHUB_WORKSPACE/kernel_patches/oneplus/hmbird/ak3_hmbird_patch.patch"
         fi
       
-        cp "$CONFIG_DIR/map_spoof/binary/map_spoof" .
-        sed -i '/## end boot install/i cp map_spoof /data/adb/ksu/bin/map_spoof' anykernel.sh
-        sed -i '/## end boot install/i chmod +x /data/adb/ksu/bin/map_spoof' anykernel.sh
-      
         ZIP_NAME="AnyKernel3_${{ inputs.model }}_${{ env.KERNEL_FULL_VER }}_Next_${KSUVER}_${SUSVER}.zip"
         ARTIFACTS_DIR="$CONFIG_DIR/artifacts"
         mkdir -p "$ARTIFACTS_DIR"

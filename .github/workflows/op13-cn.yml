@@ -109,7 +109,7 @@ jobs:
       REPO_OWNER: ${{ github.repository_owner }}
       REPO_NAME: ${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_NAME: '*TEST BUILD* OnePlus 13 CN Kernel With KernelSU Next & SUSFS v1.5.12 *TEST BUILD*'
+      RELEASE_NAME: '*TEST BUILD* OnePlus 13 PJZ Kernel With KernelSU Next & SUSFS v1.5.12 *TEST BUILD*'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -181,7 +181,6 @@ jobs:
           - [+] BBR v1 Support
           - [+] HMBIRD scx support for OnePlus 13
           - [+] Baseband Guard Support (BBG).
-          - [+] xx_maps hide.
           EOF
           
           # Output for debugging
