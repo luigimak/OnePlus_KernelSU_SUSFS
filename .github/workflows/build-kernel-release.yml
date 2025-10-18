@@ -156,6 +156,11 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.set-op-model.outputs.matrix) }}
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
       - name: Resolve SUSFS branch from inputs
         id: susfs
         shell: bash
@@ -175,11 +180,6 @@ jobs:
             exit 1
           fi
           echo "susfs_branch=${map[$key]}" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
 
       - name: Build Kernel
         uses: ./.github/actions
