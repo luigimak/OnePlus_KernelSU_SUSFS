@@ -103,37 +103,28 @@ jobs:
             model=$(basename "$file" .json)
             models+=("$model")
           done < <(find configs/ -name "*.json" -print0)
-
+        
           if [ ${#models[@]} -eq 0 ]; then
             echo "Error: No config files found in configs/ directory!"
             exit 1
           fi
-
+        
           echo "[" > matrix.json
           for i in "${!models[@]}"; do
             model="${models[$i]}"
             file="configs/$model.json"
             if [ -f "$file" ]; then
-              jq -r --arg model "$model" '
-                {
-                  model: $model,
-                  soc: .soc,
-                  branch: .branch,
-                  manifest: .manifest,
-                  android_version: .android_version,
-                  kernel_version: .kernel_version
-                }
-              ' "$file" >> matrix.json
+              jq -r '.' "$file" >> matrix.json
               if [ $((i+1)) -lt ${#models[@]} ]; then
                 echo "," >> matrix.json
               fi
             fi
           done
           echo "]" >> matrix.json
-
+        
           input="${{ github.event.inputs.op_model }}"
           jq_filter="."
-
+        
           if [[ "$input" == "ALL" ]]; then
             :
           elif [[ "$input" == android*-* ]]; then
@@ -142,10 +133,10 @@ jobs:
           else
             jq_filter="map(select(.model == \"$input\"))"
           fi
-
+        
           filtered=$(jq -c "$jq_filter" matrix.json)
           wrapped=$(jq -n --argjson items "$filtered" '{ include: $items }')
-
+        
           echo "matrix<<MATRIX_EOF" >> "$GITHUB_OUTPUT"
           echo "$wrapped" >> "$GITHUB_OUTPUT"
           echo "MATRIX_EOF" >> "$GITHUB_OUTPUT"
@@ -186,10 +177,7 @@ jobs:
       - name: Build Kernel
         uses: ./.github/actions
         with:
-          model: ${{ matrix.model }}
-          soc: ${{ matrix.soc }}
-          branch: ${{ matrix.branch }}
-          manifest: ${{ matrix.manifest }}
+          op_config_json: ${{ toJSON(matrix) }}
           ksun_branch: ${{ inputs.ksun_branch }}
           susfs_commit_hash_or_branch: ${{ steps.susfs.outputs.susfs_branch }}
           optimize_level: ${{ inputs.optimize_level }}
