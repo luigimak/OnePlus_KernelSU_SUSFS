@@ -12,6 +12,38 @@ on:
         required: true
         type: boolean
         default: false
+      op_model:
+        description: 'Select the OnePlus kernels to build'
+        required: true
+        type: choice
+        options:
+          - OP13-CPH
+          - OP13-PJZ
+          - OP13r
+          - OP13S
+          - OP13T
+          - OP12
+          - OP12r
+          - OP11
+          - OP11r
+          - OP10pro
+          - OP10t
+          - OP-Nord-5
+          - OP-NORD-4
+          - OP-NORD-4-CE
+          - OP-NORD-CE4-LITE
+          - OP-ACE-5-PRO
+          - OP-ACE-5
+          - OP-ACE-3-PRO
+          - OP-ACE-3V
+          - OP-ACE-2-PRO
+          - OP-ACE-2
+          - OP-OPEN
+          - OP-PAD-3
+          - OP-PAD-2-PRO
+          - OP-PAD-2
+          - OP-PAD-PRO
+        default: OP11
       ksun_branch:
         description: 'Enter KernelSU Next Branch or commit hash (blank for stable tag)'
         required: true
@@ -49,20 +81,64 @@ on:
         default: ''
 
 jobs:
+  set-op-model:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout Code (to access configs/)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            configs/
+          sparse-checkout-cone-mode: false
+
+      - name: Setup OnePlus Model
+        id: set-matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          declare -a models=()
+          while IFS= read -r -d '' file; do
+            model=$(basename "$file" .json)
+            models+=("$model")
+          done < <(find configs/ -name "*.json" -print0)
+        
+          if [ ${#models[@]} -eq 0 ]; then
+            echo "Error: No config files found in configs/ directory!"
+            exit 1
+          fi
+        
+          echo "[" > matrix.json
+          for i in "${!models[@]}"; do
+            model="${models[$i]}"
+            file="configs/$model.json"
+            if [ -f "$file" ]; then
+              jq -r '.' "$file" >> matrix.json
+              if [ $((i+1)) -lt ${#models[@]} ]; then
+                echo "," >> matrix.json
+              fi
+            fi
+          done
+          echo "]" >> matrix.json
+        
+          input="${{ github.event.inputs.op_model }}"
+          jq_filter="map(select(.model == \"$input\"))"
+        
+          filtered=$(jq -c "$jq_filter" matrix.json)
+          wrapped=$(jq -n --argjson items "$filtered" '{ include: $items }')
+        
+          echo "matrix<<MATRIX_EOF" >> "$GITHUB_OUTPUT"
+          echo "$wrapped" >> "$GITHUB_OUTPUT"
+          echo "MATRIX_EOF" >> "$GITHUB_OUTPUT"
+
   build:
     name: build (${{ matrix.model }}, ${{ matrix.soc }}, ${{ matrix.branch }}, ${{ matrix.manifest }}, ${{ matrix.android_version }}, ${{ matrix.kernel_version }}, ${{ inputs.ksun_branch }})
+    needs: set-op-model
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        include:
-        - model: OP11
-          soc: kalama
-          branch: oneplus/sm8550
-          manifest: oneplus_11_v.xml
-          android_version: android13
-          kernel_version: '5.15'
-
+      matrix: ${{ fromJSON(needs.set-op-model.outputs.matrix) }}
     steps:
       - name: Resolve SUSFS branch from inputs
         id: susfs
@@ -78,7 +154,6 @@ jobs:
             ["android14-6.1"]="${{ inputs.android14-6_1_susfs_branch_or_commit }}"
             ["android15-6.6"]="${{ inputs.android15-6_6_susfs_branch_or_commit }}"
           )
-          # Only validate mapping presence; allow empty string value to be passed through.
           if [[ -z "${map[$key]+_exists}" ]]; then
             echo "Unsupported combo (no mapping): $key" >&2
             exit 1
@@ -93,10 +168,7 @@ jobs:
       - name: Build Kernel
         uses: WildKernels/OnePlus_KernelSU_SUSFS/.github/actions@main
         with:
-          model: ${{ matrix.model }}
-          soc: ${{ matrix.soc }}
-          branch: ${{ matrix.branch }}
-          manifest: ${{ matrix.manifest }}
+          op_config_json: ${{ toJSON(matrix) }}
           ksun_branch: ${{ inputs.ksun_branch }}
           susfs_commit_hash_or_branch: ${{ steps.susfs.outputs.susfs_branch }}
           optimize_level: ${{ inputs.optimize_level }}
@@ -115,10 +187,10 @@ jobs:
         
         Module: 
         -> https://github.com/sidex15/ksu_module_susfs
-
+        
         Non-Official Managers:
         -> https://github.com/KernelSU-Next/KernelSU-Next
-
+        
         Features:
         [+] KernelSU-Next / WildKSU Manager Support
         [+] SUSFS v1.5.12
@@ -130,7 +202,6 @@ jobs:
         [+] BBR v1 Support.
         [+] HMBIRD scx support for OnePlus 13 & OnePlus Ace 5 Pro.
         [+] Baseband Guard Support (BBG).
-        [+] xx_maps hide.
 
     steps:
       - name: Checkout code
