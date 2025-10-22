@@ -55,6 +55,10 @@ runs:
         soc="$OP_SOC"
         branch="$OP_BRANCH"
         manifest="$OP_MANIFEST"
+        android_version="$OP_ANDROID_VERSION"
+        kernel_version="$OP_KERNEL_VERSION"
+        os_version="$OP_OS_VERSION"
+        hmbird="$OP_HMBIRD"
         optimize='${{ inputs.optimize_level }}'
     
         # Non-empty checks
@@ -62,6 +66,10 @@ runs:
         [[ -n "$soc" ]] || { echo "Input 'soc' cannot be empty"; exit 1; }
         [[ -n "$branch" ]] || { echo "Input 'branch' cannot be empty"; exit 1; }
         [[ -n "$manifest" ]] || { echo "Input 'manifest' cannot be empty"; exit 1; }
+        [[ -n "$android_version" ]] || { echo "Input 'android_version' cannot be empty"; exit 1; }
+        [[ -n "$kernel_version" ]] || { echo "Input 'kernel_version' cannot be empty"; exit 1; }
+        [[ -n "$os_version" ]] || { echo "Input 'os_version' cannot be empty"; exit 1; }
+        [[ -n "$hmbird" ]] || { echo "Input 'hmbird' cannot be empty"; exit 1; }
     
         # Basic format checks
         # soc: allow letters, digits, underscores, dashes (e.g., sm8650)
@@ -87,6 +95,15 @@ runs:
           if [[ "$manifest" =~ [[:space:]] ]]; then
             echo "Manifest filename cannot contain spaces"; exit 1
           fi
+        fi
+        if ! [[ "$android_version" =~ ^android[0-9]+$ ]]; then
+          echo "Input 'android_version' contains invalid characters. Allowed: android followed by a number"; exit 1
+        fi
+        if ! [[ "$kernel_version" =~ ^[0-9]+\.[0-9]+$ ]]; then
+          echo "Input 'kernel_version' contains invalid characters. Allowed: number in X.Y format"; exit 1
+        fi
+        if [[ "$hmbird" != "true" && "$hmbird" != "false" ]]; then
+          echo "Input 'hmbird' contains invalid characters. Allowed: 'true' or 'false'"; exit 1
         fi
         # Optimize level validation
         case "$optimize" in
