@@ -111,14 +111,14 @@ runs:
           echo "::endgroup::"
         fi
         echo "Work directory: $(pwd)"
-        rm -rf "$GITHUB_WORKSPACE/${{ inputs.model }}" || true
+        rm -rf "$GITHUB_WORKSPACE/${OP_MODEL}" || true
 
     - name: Setup Base Environment
       shell: bash
       run: |
         set -euo pipefail
         # Derive a unique build directory name
-        CONFIG="${{ inputs.model }}"
+        CONFIG="${OP_MODEL}"
         echo "CONFIG=$CONFIG" >> "$GITHUB_ENV"
         # Install repo tool if missing
         mkdir -p "$HOME/.local/bin"
@@ -195,6 +195,7 @@ runs:
         FULL_VERSION="$VERSION.$PATCHLEVEL.$SUBLEVEL"
         cd "$ARTIFACTS_DIR"
         echo "$ANDROID_VERSION-$FULL_VERSION" > "${OP_MODEL}.txt"
+        echo "$OP_OS_VERSION" >> "${OP_MODEL}.txt"
         echo "ANDROID_VER=$ANDROID_VERSION" >> "$GITHUB_ENV"
         echo "KERNEL_VER=$VERSION.$PATCHLEVEL" >> "$GITHUB_ENV"
         echo "KERNEL_FULL_VER=$ANDROID_VERSION-$FULL_VERSION" >> "$GITHUB_ENV"
@@ -637,7 +638,7 @@ runs:
           patch -F 3 < "$GITHUB_WORKSPACE/kernel_patches/oneplus/hmbird/ak3_hmbird_patch.patch"
         fi
       
-        ZIP_NAME="AnyKernel3_${OP_MODEL}_${{ env.KERNEL_FULL_VER }}_Next_${KSUVER}_${SUSVER}.zip"
+        ZIP_NAME="AnyKernel3_${OP_MODEL}_${KERNEL_FULL_VER}_Next_${KSUVER}_${SUSVER}.zip"
         ARTIFACTS_DIR="$CONFIG_DIR/artifacts"
         mkdir -p "$ARTIFACTS_DIR"
       
@@ -655,7 +656,7 @@ runs:
       run: |
         set -euo pipefail
         {
-          echo "Model: ${OP_MODEL}"
+          echo "Model: ${{ env.OP_MODEL }}"
           echo "Android: ${{ env.ANDROID_VER }}"
           echo "Kernel base: ${{ env.KERNEL_VER }}"
           echo "Kernel full: ${{ env.KERNEL_FULL_VER }}"
@@ -672,7 +673,7 @@ runs:
         {
           echo "### Kernel Build Summary"
           echo ""
-          echo "- Model: ${OP_MODEL}"
+          echo "- Model: ${{ env.OP_MODEL }}"
           echo "- Android: ${{ env.ANDROID_VER }}"
           echo "- Kernel Version: ${{ steps.save_metadata.outputs.kernel_version }}"
           echo "- Kernel Uname: ${{ env.KERNEL_UNAME }}"

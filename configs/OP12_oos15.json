@@ -1,8 +1,8 @@
 {
-  "model": "OP-NORD-4",
+  "model": "OP12_oos15",
   "soc": "pineapple",
-  "branch": "oneplus/sm7675",
-  "manifest": "oneplus_nord_4_v.xml",
+  "branch": "oneplus/sm8650",
+  "manifest": "oneplus12_v.xml",
   "android_version": "android14",
   "kernel_version": "6.1",
   "os_version": "OOS15",

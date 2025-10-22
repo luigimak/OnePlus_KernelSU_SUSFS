@@ -1,9 +1,10 @@
 {
-  "model": "OP12",
+  "model": "OP12_oos14",
   "soc": "pineapple",
   "branch": "oneplus/sm8650",
-  "manifest": "oneplus12_v.xml",
+  "manifest": "oneplus12_u.xml",
   "android_version": "android14",
   "kernel_version": "6.1",
+  "os_version": "OOS14",
   "hmbird": false
 }

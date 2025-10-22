@@ -1,8 +1,8 @@
 {
-  "model": "OP-OPEN",
+  "model": "OP11_oos15",
   "soc": "kalama",
   "branch": "oneplus/sm8550",
-  "manifest": "oneplus_open_v.xml",
+  "manifest": "oneplus_11_v.xml",
   "android_version": "android13",
   "kernel_version": "5.15",
   "os_version": "OOS15",

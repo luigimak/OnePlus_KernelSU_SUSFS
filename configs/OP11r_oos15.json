@@ -1,8 +1,8 @@
 {
-  "model": "OP10pro",
+  "model": "OP11r_oos15",
   "soc": "waipio",
-  "branch": "oneplus/sm8450",
-  "manifest": "oneplus_10_pro_v.xml",
+  "branch": "oneplus/sm8475",
+  "manifest": "oneplus_11r_v.xml",
   "android_version": "android12",
   "kernel_version": "5.10",
   "os_version": "OOS15",
