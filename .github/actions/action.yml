@@ -43,6 +43,9 @@ runs:
         set -euo pipefail
         echo '${{ inputs.op_config_json }}' > /tmp/config.json
         jq -r 'to_entries[] | "OP_\(.key | ascii_upcase)=\(.value)"' /tmp/config.json >> "$GITHUB_ENV"
+        OP_MODEL_VALUE=$(jq -r '.model' /tmp/config.json)
+        OP_BASE_MODEL_VALUE=$(echo "$OP_MODEL_VALUE" | sed -E 's/_[^_]*$//')
+        echo "OP_BASE_MODEL=$OP_BASE_MODEL_VALUE" >> "$GITHUB_ENV"
         echo "Parsed config:"
         jq '.' /tmp/config.json
 
@@ -52,6 +55,7 @@ runs:
         set -euo pipefail
         echo "::group::Validate inputs"
         model="$OP_MODEL"
+        base_model="$OP_BASE_MODEL"
         soc="$OP_SOC"
         branch="$OP_BRANCH"
         manifest="$OP_MANIFEST"
@@ -67,6 +71,9 @@ runs:
         # Non-empty checks
         if [[ -z "$model" ]]; then
           errors+=("Input 'model' cannot be empty")
+        fi
+        if [[ -z "$base_model" ]]; then
+          errors+=("Input 'base_model' cannot be empty")
         fi
         if [[ -z "$soc" ]]; then
           errors+=("Input 'soc' cannot be empty")
@@ -690,7 +697,7 @@ runs:
           patch -F 3 < "$GITHUB_WORKSPACE/kernel_patches/oneplus/hmbird/ak3_hmbird_patch.patch"
         fi
       
-        ZIP_NAME="AnyKernel3_${OP_MODEL}_${KERNEL_FULL_VER}_Next_${KSUVER}_${SUSVER}.zip"
+        ZIP_NAME="AnyKernel3_${OP_BASE_MODEL}_${OP_OS_VERSION}_${KERNEL_FULL_VER}_Next_${KSUVER}_${SUSVER}.zip"
         ARTIFACTS_DIR="$CONFIG_DIR/artifacts"
         mkdir -p "$ARTIFACTS_DIR"
       
@@ -708,11 +715,12 @@ runs:
       run: |
         set -euo pipefail
         {
-          echo "Model: ${{ env.OP_MODEL }}"
+          echo "Model: ${{ env.OP_BASE_MODEL }}"
           echo "Android: ${{ env.ANDROID_VER }}"
           echo "Kernel base: ${{ env.KERNEL_VER }}"
           echo "Kernel full: ${{ env.KERNEL_FULL_VER }}"
           echo "Kernel Uname: ${{ env.KERNEL_UNAME }}"
+          echo "OS Version: ${{ env.OP_OS_VERSION }}"
           echo "KSUN Version: ${KSUVER:-unknown}"
           echo "KSUN commit SHA: ${{ env.KSUN_COMMIT_SHA }}"
           echo "SUSFS Version: ${SUSVER:-unknown}"
@@ -725,10 +733,11 @@ runs:
         {
           echo "### Kernel Build Summary"
           echo ""
-          echo "- Model: ${{ env.OP_MODEL }}"
+          echo "- Model: ${{ env.OP_BASE_MODEL }}"
           echo "- Android: ${{ env.ANDROID_VER }}"
           echo "- Kernel Version: ${{ steps.save_metadata.outputs.kernel_version }}"
           echo "- Kernel Uname: ${{ env.KERNEL_UNAME }}"
+          echo "- OS Version: ${{ env.OP_OS_VERSION }}"
           echo "- KSUN Version: ${KSUVER:-unknown}"
           echo "- KSUN commit SHA: [${{ env.KSUN_COMMIT_SHA }}](https://github.com/KernelSU-Next/KernelSU-Next/commit/${{ env.KSUN_COMMIT_SHA }})"
           echo "- SUSFS Version: ${SUSVER:-unknown}"
