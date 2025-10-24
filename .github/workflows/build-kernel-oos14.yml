@@ -1,4 +1,4 @@
-name: Build and Release OnePlus Kernels
+name: Build and Release OnePlus Kernels OOS14
 
 permissions:
   contents: write
@@ -18,34 +18,15 @@ on:
         type: choice
         options:
           - ALL
-          - Only-oos15
-          - Only-oos14
           - android15-6.6
           - android14-6.1
           - android14-5.15
           - android13-5.15
           - android13-5.10
           - android12-5.10
-          - OP13-CPH
-          - OP13-PJZ
-          - OP13r
-          - OP13S
-          - OP12_oos15
-          - OP12_oos14
-          - OP12r
-          - OP11_oos15
-          - OP11_oos14
-          - OP11r_oos15
-          - OP11r_oos14
-          - OP10pro
-          - OP10t
-          - OP-Nord-5
-          - OP-NORD-4
-          - OP-NORD-4-CE
-          - OP-NORD-CE4-LITE
-          - OP-OPEN
-          - OP-PAD-3
-          - OP-PAD-2
+          - OP12
+          - OP11
+          - OP11r
         default: ALL
       ksun_branch:
         description: 'Enter KernelSU Next Branch or commit hash (blank for stable tag)'
@@ -94,7 +75,7 @@ jobs:
         with:
           clean: true
           sparse-checkout: |
-            configs/
+            configs/oos14/
             .github/actions/
           sparse-checkout-cone-mode: false
 
@@ -107,17 +88,17 @@ jobs:
           while IFS= read -r -d '' file; do
             model=$(basename "$file" .json)
             models+=("$model")
-          done < <(find configs/ -name "*.json" -print0)
+          done < <(find configs/oos14/ -name "*.json" -print0)
         
           if [ ${#models[@]} -eq 0 ]; then
-            echo "Error: No config files found in configs/ directory!"
+            echo "Error: No config files found in configs/oos14/ directory!"
             exit 1
           fi
         
           echo "[" > matrix.json
           for i in "${!models[@]}"; do
             model="${models[$i]}"
-            file="configs/$model.json"
+            file="configs/oos14/$model.json"
             if [ -f "$file" ]; then
               jq -r '.' "$file" >> matrix.json
               if [ $((i+1)) -lt ${#models[@]} ]; then
@@ -132,10 +113,6 @@ jobs:
         
           if [[ "$input" == "ALL" ]]; then
             :
-          elif [[ "$input" == "Only-oos15" ]]; then
-            jq_filter="map(select(.os_version == \"OOS15\"))"
-          elif [[ "$input" == "Only-oos14" ]]; then
-            jq_filter="map(select(.os_version == \"OOS14\"))"
           elif [[ "$input" == android*-* ]]; then
             IFS='-' read -r av kv <<< "$input"
             jq_filter="map(select(.android_version == \"$av\" and .kernel_version == \"$kv\"))"

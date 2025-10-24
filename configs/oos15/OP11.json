@@ -1,5 +1,5 @@
 {
-  "model": "OP11_oos15",
+  "model": "OP11",
   "soc": "kalama",
   "branch": "oneplus/sm8550",
   "manifest": "oneplus_11_v.xml",
