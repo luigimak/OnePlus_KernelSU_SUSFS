@@ -1,4 +1,4 @@
-name: Build and Release OnePlus Kernels OOS14
+name: OOS14 Build and Release OnePlus Kernels
 
 permissions:
   contents: write
