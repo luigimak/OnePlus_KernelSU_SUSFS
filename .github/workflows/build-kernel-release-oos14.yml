@@ -89,18 +89,7 @@ jobs:
             exit 1
           fi
         
-          echo "[" > matrix.json
-          for i in "${!models[@]}"; do
-            model="${models[$i]}"
-            file="configs/oos15/$model.json"
-            if [ -f "$file" ]; then
-              jq '.' "$file" >> matrix.json
-              if [ $((i+1)) -lt ${#models[@]} ]; then
-                echo "," >> matrix.json
-              fi
-            fi
-          done
-          echo "]" >> matrix.json
+          jq -s '.' configs/oos15/*.json > matrix.json
         
           input="${{ github.event.inputs.op_model }}"
           jq_filter="map(select(.model == \"$input\"))"
