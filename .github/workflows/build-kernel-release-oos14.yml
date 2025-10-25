@@ -1,4 +1,4 @@
-name: Build and Release OnePlus Kernels
+name: OOS14 Build and Release OnePlus Kernels
 
 permissions:
   contents: write
@@ -17,33 +17,10 @@ on:
         required: true
         type: choice
         options:
-          - OP13-CPH
-          - OP13-PJZ
-          - OP13r
-          - OP13S
-          - OP13T
           - OP12
-          - OP12r
           - OP11
-          - OP11u
           - OP11r
-          - OP10pro
-          - OP10t
-          - OP-Nord-5
-          - OP-NORD-4
-          - OP-NORD-4-CE
-          - OP-NORD-CE4-LITE
-          - OP-ACE-5-PRO
-          - OP-ACE-5
           - OP-ACE-3-PRO
-          - OP-ACE-3V
-          - OP-ACE-2-PRO
-          - OP-ACE-2
-          - OP-OPEN
-          - OP-PAD-3
-          - OP-PAD-2-PRO
-          - OP-PAD-2
-          - OP-PAD-PRO
         default: OP11
       ksun_branch:
         description: 'Enter KernelSU Next Branch or commit hash (blank for stable tag)'
@@ -90,8 +67,10 @@ jobs:
       - name: Checkout Code (to access configs/)
         uses: actions/checkout@v4
         with:
+          repository: WildKernels/OnePlus_KernelSU_SUSFS
+          ref: main
           sparse-checkout: |
-            configs/
+            configs/oos14/
           sparse-checkout-cone-mode: false
 
       - name: Setup OnePlus Model
@@ -103,17 +82,17 @@ jobs:
           while IFS= read -r -d '' file; do
             model=$(basename "$file" .json)
             models+=("$model")
-          done < <(find configs/ -name "*.json" -print0)
+          done < <(find configs/oos14/ -name "*.json" -print0)
         
           if [ ${#models[@]} -eq 0 ]; then
-            echo "Error: No config files found in configs/ directory!"
+            echo "Error: No config files found in configs/oos14/ directory!"
             exit 1
           fi
         
           echo "[" > matrix.json
           for i in "${!models[@]}"; do
             model="${models[$i]}"
-            file="configs/$model.json"
+            file="configs/oos14/$model.json"
             if [ -f "$file" ]; then
               jq -r '.' "$file" >> matrix.json
               if [ $((i+1)) -lt ${#models[@]} ]; then
@@ -182,7 +161,7 @@ jobs:
       REPO_OWNER: ${{ github.repository_owner }}
       REPO_NAME: ${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_NAME: '*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v1.5.12 *TEST BUILD*'
+      RELEASE_NAME: '*TEST BUILD* OOS14 OnePlus Kernels With KernelSU Next & SUSFS v1.5.12 *TEST BUILD*'
       RELEASE_NOTES: |
         This release contains KernelSU Next and SUSFS v1.5.12
         
