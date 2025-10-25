@@ -1,4 +1,4 @@
-name: Build and Release OnePlus Kernels
+name: OOS15 Build and Release OnePlus Kernels
 
 permissions:
   contents: write
@@ -25,7 +25,6 @@ on:
           - OP12
           - OP12r
           - OP11
-          - OP11u
           - OP11r
           - OP10pro
           - OP10t
@@ -90,9 +89,11 @@ jobs:
       - name: Checkout Code (to access configs/)
         uses: actions/checkout@v4
         with:
+          repository: WildKernels/OnePlus_KernelSU_SUSFS
+          ref: main
           sparse-checkout: |
-            configs/
-          sparse-checkout-cone-mode: false
+            configs/oos15/
+          path: configs/oos15/
 
       - name: Setup OnePlus Model
         id: set-matrix
@@ -103,17 +104,17 @@ jobs:
           while IFS= read -r -d '' file; do
             model=$(basename "$file" .json)
             models+=("$model")
-          done < <(find configs/ -name "*.json" -print0)
+          done < <(find configs/oos15/ -name "*.json" -print0)
         
           if [ ${#models[@]} -eq 0 ]; then
-            echo "Error: No config files found in configs/ directory!"
+            echo "Error: No config files found in configs/oos15/ directory!"
             exit 1
           fi
         
           echo "[" > matrix.json
           for i in "${!models[@]}"; do
             model="${models[$i]}"
-            file="configs/$model.json"
+            file="configs/oos15/$model.json"
             if [ -f "$file" ]; then
               jq -r '.' "$file" >> matrix.json
               if [ $((i+1)) -lt ${#models[@]} ]; then
@@ -182,7 +183,7 @@ jobs:
       REPO_OWNER: ${{ github.repository_owner }}
       REPO_NAME: ${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_NAME: '*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v1.5.12 *TEST BUILD*'
+      RELEASE_NAME: '*TEST BUILD* OOS15 OnePlus Kernels With KernelSU Next & SUSFS v1.5.12 *TEST BUILD*'
       RELEASE_NOTES: |
         This release contains KernelSU Next and SUSFS v1.5.12
         
