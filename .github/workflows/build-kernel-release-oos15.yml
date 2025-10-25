@@ -89,8 +89,8 @@ jobs:
       - name: Checkout Code (to access configs/)
         uses: actions/checkout@v4
         with:
-          repository: WildKernels/OnePlus_KernelSU_SUSFS
-          ref: main
+          repository: luigimak/OnePlus_KernelSU_SUSFS
+          ref: main_split
           sparse-checkout: |
             configs/oos15/
           path: configs/oos15/
@@ -168,7 +168,7 @@ jobs:
           fetch-depth: 1
 
       - name: Build Kernel
-        uses: WildKernels/OnePlus_KernelSU_SUSFS/.github/actions@main
+        uses: luigimak/OnePlus_KernelSU_SUSFS/.github/actions@main_split
         with:
           op_config_json: ${{ toJSON(matrix) }}
           ksun_branch: ${{ inputs.ksun_branch }}
