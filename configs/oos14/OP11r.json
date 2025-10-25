@@ -1,9 +1,10 @@
 {
-  "model": "OP10t",
+  "model": "OP11r",
   "soc": "waipio",
   "branch": "oneplus/sm8475",
-  "manifest": "oneplus_10t_v.xml",
+  "manifest": "oneplus_11r_u.xml",
   "android_version": "android12",
   "kernel_version": "5.10",
+  "os_version": "OOS14",
   "hmbird": false
 }
