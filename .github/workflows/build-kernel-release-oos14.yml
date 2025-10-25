@@ -106,6 +106,13 @@ jobs:
           jq_filter="map(select(.model == \"$input\"))"
         
           filtered=$(jq -c "$jq_filter" matrix.json)
+        
+          if [ "$(jq length <<< "$filtered")" -eq 0 ]; then
+            echo "Error: No config found for model '$input' in configs/oos15/"
+            echo "Available models: ${models[*]}"
+            exit 1
+          fi
+        
           wrapped=$(jq -n --argjson items "$filtered" '{ include: $items }')
         
           echo "matrix<<MATRIX_EOF" >> "$GITHUB_OUTPUT"
