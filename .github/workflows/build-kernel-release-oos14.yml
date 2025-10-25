@@ -1,4 +1,4 @@
-name: Build and Release OnePlus Kernels
+name: OOS14 Build and Release OnePlus Kernels
 
 permissions:
   contents: write
@@ -18,38 +18,10 @@ on:
         type: choice
         options:
           - ALL
-          - android15-6.6
-          - android14-6.1
-          - android14-5.15
-          - android13-5.15
-          - android13-5.10
-          - android12-5.10
-          - OP13-CPH
-          - OP13-PJZ
-          - OP13r
-          - OP13S
-          - OP13T
           - OP12
-          - OP12r
           - OP11
           - OP11r
-          - OP10pro
-          - OP10t
-          - OP-Nord-5
-          - OP-NORD-4
-          - OP-NORD-4-CE
-          - OP-NORD-CE4-LITE
-          - OP-ACE-5-PRO
-          - OP-ACE-5
           - OP-ACE-3-PRO
-          - OP-ACE-3V
-          - OP-ACE-2-PRO
-          - OP-ACE-2
-          - OP-OPEN
-          - OP-PAD-3
-          - OP-PAD-2-PRO
-          - OP-PAD-2
-          - OP-PAD-PRO
         default: ALL
       ksun_branch:
         description: 'Enter KernelSU Next Branch or commit hash (blank for stable tag)'
@@ -97,7 +69,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           sparse-checkout: |
-            configs/
+            configs/oos14/
           sparse-checkout-cone-mode: false
 
       - name: Setup OnePlus Model
@@ -109,17 +81,17 @@ jobs:
           while IFS= read -r -d '' file; do
             model=$(basename "$file" .json)
             models+=("$model")
-          done < <(find configs/ -name "*.json" -print0)
+          done < <(find configs/oos14/ -name "*.json" -print0)
         
           if [ ${#models[@]} -eq 0 ]; then
-            echo "Error: No config files found in configs/ directory!"
+            echo "Error: No config files found in configs/oos14/ directory!"
             exit 1
           fi
         
           echo "[" > matrix.json
           for i in "${!models[@]}"; do
             model="${models[$i]}"
-            file="configs/$model.json"
+            file="configs/oos14/$model.json"
             if [ -f "$file" ]; then
               jq -r '.' "$file" >> matrix.json
               if [ $((i+1)) -lt ${#models[@]} ]; then
@@ -198,7 +170,7 @@ jobs:
       REPO_OWNER: ${{ github.repository_owner }}
       REPO_NAME: ${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_NAME: '*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v1.5.12 *TEST BUILD*'
+      RELEASE_NAME: '*TEST BUILD* OOS14 OnePlus Kernels With KernelSU Next & SUSFS v1.5.12 *TEST BUILD*'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -243,16 +215,21 @@ jobs:
           
           ### Built Devices
           
-          | Model | Kernel Version |
-          |-------|----------------|
+          | Model | OS Version | Kernel Version |
+          |-------|------------|----------------|
           EOF
           
           # Generate table rows
           for file in $(find downloaded-artifacts -name "*.txt" -type f | sort); do
             if [ -f "$file" ]; then
               model=$(basename "$file" .txt)
-              version=$(cat "$file")
-              printf "| %-12s | %-16s |\n" "$model" "$version" >> release_notes.md
+              os_version=$(sed -n '2p' "$file")
+              kernel_version=$(sed -n '1p' "$file")
+              if [ -n "$model" ] && [ -n "$os_version" ] && [ -n "$kernel_version" ]; then
+                printf "| %-12s | %-10s | %-16s |\n" "$model" "$os_version" "$kernel_version" >> release_notes.md
+              else
+                echo "Warning: Could not read kernel version or OS version from $file. Skipping row for $model."
+              fi
             fi
           done
           

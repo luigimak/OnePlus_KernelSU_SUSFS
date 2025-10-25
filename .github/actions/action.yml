@@ -55,45 +55,97 @@ runs:
         soc="$OP_SOC"
         branch="$OP_BRANCH"
         manifest="$OP_MANIFEST"
+        android_version="$OP_ANDROID_VERSION"
+        kernel_version="$OP_KERNEL_VERSION"
+        os_version="$OP_OS_VERSION"
+        hmbird="$OP_HMBIRD"
         optimize='${{ inputs.optimize_level }}'
-    
+      
+        # Initialize an array to collect errors
+        errors=()
+      
         # Non-empty checks
-        [[ -n "$model" ]] || { echo "Input 'model' cannot be empty"; exit 1; }
-        [[ -n "$soc" ]] || { echo "Input 'soc' cannot be empty"; exit 1; }
-        [[ -n "$branch" ]] || { echo "Input 'branch' cannot be empty"; exit 1; }
-        [[ -n "$manifest" ]] || { echo "Input 'manifest' cannot be empty"; exit 1; }
-    
+        if [[ -z "$model" ]]; then
+          errors+=("Input 'model' cannot be empty")
+        fi
+        if [[ -z "$soc" ]]; then
+          errors+=("Input 'soc' cannot be empty")
+        fi
+        if [[ -z "$branch" ]]; then
+          errors+=("Input 'branch' cannot be empty")
+        fi
+        if [[ -z "$manifest" ]]; then
+          errors+=("Input 'manifest' cannot be empty")
+        fi
+        if [[ -z "$android_version" ]]; then
+          errors+=("Input 'android_version' cannot be empty")
+        fi
+        if [[ -z "$kernel_version" ]]; then
+          errors+=("Input 'kernel_version' cannot be empty")
+        fi
+        if [[ -z "$os_version" ]]; then
+          errors+=("Input 'os_version' cannot be empty")
+        fi
+        if [[ -z "$hmbird" ]]; then
+          errors+=("Input 'hmbird' cannot be empty")
+        fi
+      
         # Basic format checks
         # soc: allow letters, digits, underscores, dashes (e.g., sm8650)
-        if ! [[ "$soc" =~ ^[A-Za-z0-9_-]+$ ]]; then
-          echo "Input 'soc' contains invalid characters. Allowed: letters, digits, underscore, dash"; exit 1
-        fi    
+        if [[ -n "$soc" && ! "$soc" =~ ^[A-Za-z0-9_-]+$ ]]; then
+          errors+=("Input 'soc' contains invalid characters. Allowed: letters, digits, underscore, dash")
+        fi
         # branch: allow common ref patterns; spaces not allowed
-        if ! [[ "$branch" =~ ^[A-Za-z0-9._/-]+$ ]]; then
-          echo "Input 'branch' contains invalid characters. Allowed: letters, digits, ., _, -, /"; exit 1
-        fi    
+        if [[ -n "$branch" && ! "$branch" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+          errors+=("Input 'branch' contains invalid characters. Allowed: letters, digits, ., _, -, /")
+        fi
         # manifest: either HTTPS URL ending with .xml, or a filename ending with .xml (no spaces)
-        if [[ "$manifest" == http*://* ]]; then
-          if ! [[ "$manifest" =~ ^https:// ]]; then
-            echo "Manifest URL must be HTTPS"; exit 1
+        if [[ -n "$manifest" ]]; then
+          if [[ "$manifest" == http*://* ]]; then
+            if [[ ! "$manifest" =~ ^https:// ]]; then
+              errors+=("Manifest URL must be HTTPS")
+            fi
+            if [[ ! "$manifest" =~ \.xml($|\?) ]]; then
+              errors+=("Manifest URL should point to an XML file (.xml)")
+            fi
+          else
+            if [[ ! "$manifest" =~ \.xml$ ]]; then
+              errors+=("Manifest filename must end with .xml")
+            fi
+            if [[ "$manifest" =~ [[:space:]] ]]; then
+              errors+=("Manifest filename cannot contain spaces")
+            fi
           fi
-          if ! [[ "$manifest" =~ \.xml($|\?) ]]; then
-            echo "Manifest URL should point to an XML file (.xml)"; exit 1
-          fi
-        else
-          if ! [[ "$manifest" =~ \.xml$ ]]; then
-            echo "Manifest filename must end with .xml"; exit 1
-          fi
-          if [[ "$manifest" =~ [[:space:]] ]]; then
-            echo "Manifest filename cannot contain spaces"; exit 1
-          fi
+        fi
+        # android_version
+        if [[ -n "$android_version" && ! "$android_version" =~ ^android[0-9]+$ ]]; then
+          errors+=("Input 'android_version' contains invalid characters. Allowed: android followed by a number")
+        fi
+        # kernel_version
+        if [[ -n "$kernel_version" && ! "$kernel_version" =~ ^[0-9]+\.[0-9]+$ ]]; then
+          errors+=("Input 'kernel_version' contains invalid characters. Allowed: number in X.Y format")
+        fi
+        # hmbird
+        if [[ -n "$hmbird" && "$hmbird" != "true" && "$hmbird" != "false" ]]; then
+          errors+=("Input 'hmbird' contains invalid characters. Allowed: 'true' or 'false'")
         fi
         # Optimize level validation
         case "$optimize" in
           O2|O3) ;;
-          *) echo "optimize_level must be O2 or O3; got '$optimize'"; exit 1 ;;
+          *) errors+=("optimize_level must be O2 or O3; got '$optimize'"); ;;
         esac
-        echo "Input validation OK."
+      
+        # Check for errors and act accordingly
+        if [ ${#errors[@]} -ne 0 ]; then
+          echo "Found ${#errors[@]} validation error(s):" >&2
+          for error in "${errors[@]}"; do
+            echo "  - $error" >&2
+          done
+          echo "::error::Input validation failed. See logs for details."
+          exit 1
+        else
+          echo "Input validation OK."
+        fi
         echo "::endgroup::"
 
     - name: Install Minimal Dependencies
@@ -183,6 +235,7 @@ runs:
         FULL_VERSION="$VERSION.$PATCHLEVEL.$SUBLEVEL"
         cd "$ARTIFACTS_DIR"
         echo "$ANDROID_VERSION-$FULL_VERSION" > "${OP_MODEL}.txt"
+        echo "$OP_OS_VERSION" >> "${OP_MODEL}.txt"
         echo "ANDROID_VER=$ANDROID_VERSION" >> "$GITHUB_ENV"
         echo "KERNEL_VER=$VERSION.$PATCHLEVEL" >> "$GITHUB_ENV"
         echo "KERNEL_FULL_VER=$ANDROID_VERSION-$FULL_VERSION" >> "$GITHUB_ENV"
@@ -307,7 +360,7 @@ runs:
             sed -i '/#include <trace\/hooks\/blk.h>/a #include <trace\/hooks\/fs.h>' ./fs/namespace.c
           fi
         fi
-        
+      
         # Fake kernel patch to fix failures
         fake_patched=0
         if [ "${{ env.ANDROID_VER }}" = "android15" ] && [ "${{ env.KERNEL_VER }}" = "6.6" ]; then
@@ -329,9 +382,9 @@ runs:
             fake_patched=1
           fi
         fi
-        
+      
         patch -p1 < 50_add_susfs_in_${{ env.SUSFS_KERNEL_BRANCH }}.patch
-        
+      
         # Revert Fake kernel patch
         if [ "$fake_patched" = 1 ]; then
           if [ "${{ env.ANDROID_VER }}" = "android15" ] && [ "${{ env.KERNEL_VER }}" = "6.6" ]; then
@@ -353,7 +406,7 @@ runs:
             fi
           fi
         fi
-        
+      
         KERNEL_VERSION="${{ env.KERNEL_VER }}"
         MIN_VERSION="5.16"
         if [ "$(printf '%s\n' "$KERNEL_VERSION" "$MIN_VERSION" | sort -V | head -n1)" = "$KERNEL_VERSION" ]; then
@@ -531,10 +584,10 @@ runs:
         COMMON="$KERNEL_PATH/common"
         cd "$COMMON"
         : > "$COMMON/.scmversion"
-        
+      
         # Ensure Python warnings are suppressed for scripts invoked by make
         export PYTHONWARNINGS="${PYTHONWARNINGS}"
-        
+      
         if [ -n "${CLANG_BIN_PATH:-}" ] && [ -x "${CLANG_BIN_PATH}/clang" ]; then
           export PATH="${CLANG_BIN_PATH}:$PATH"
         fi
@@ -547,14 +600,14 @@ runs:
         OUT=out
         mkdir -p "$OUT"
         make O="$OUT" gki_defconfig
-        
+      
         # LOCALVERSION branding
         if [ -n "${CUSTOM_LOCALVERSION:-}" ]; then
           scripts/config --file "$OUT/.config" --set-str LOCALVERSION "${CUSTOM_LOCALVERSION}"
           scripts/config --file "$OUT/.config" -d LOCALVERSION_AUTO || true
           sed -i 's/scm_version="$(scm_version --short)"/scm_version=""/' scripts/setlocalversion
         fi
-        
+      
         # Optimize level config and flags
         if [ "${{ inputs.optimize_level }}" = "O3" ]; then
           scripts/config --file "$OUT/.config" -d CC_OPTIMIZE_FOR_PERFORMANCE
@@ -565,18 +618,18 @@ runs:
           scripts/config --file "$OUT/.config" -d CC_OPTIMIZE_FOR_PERFORMANCE_O3
           KCFLAGS_EXTRA="-O2"
         fi
-        
+      
         # Consistent flags; include -pipe and disable stack protector
         KCFLAGS="-Wno-error -pipe -fno-stack-protector ${KCFLAGS_EXTRA}"
         KCPPFLAGS="-DCONFIG_OPTIMIZE_INLINING"
-        
+      
         # Regenerate defaults after config edits
         make O="$OUT" olddefconfig
-        
+      
         echo "Starting build with $(nproc --all) threads..."
         set -o pipefail
         make -j"$(nproc --all)" O="$OUT" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" 2>&1 | tee build.log
-        
+      
         IMG="$OUT/arch/arm64/boot/Image"
         if [ ! -f "$IMG" ]; then
           echo "Kernel Image missing"
@@ -626,27 +679,27 @@ runs:
           echo "ERROR: Built Image not found"
           exit 1
         fi
-    
+      
         # Put Image into AnyKernel3
         cp "$IMAGE_PATH" "$GITHUB_WORKSPACE/AnyKernel3/Image"
         cd "$GITHUB_WORKSPACE/AnyKernel3"
-    
+      
         # Optional hmbird patch logic
         if [ "$OP_HMBIRD" = true ]; then
           cp "$GITHUB_WORKSPACE/kernel_patches/oneplus/hmbird/bins/"* ./tools/ 2>/dev/null || true
           patch -F 3 < "$GITHUB_WORKSPACE/kernel_patches/oneplus/hmbird/ak3_hmbird_patch.patch"
         fi
-        
-        ZIP_NAME="AnyKernel3_${OP_MODEL}_${{ env.KERNEL_FULL_VER }}_Next_${KSUVER}_${SUSVER}.zip"
+      
+        ZIP_NAME="AK3_${OP_MODEL}_${OP_OS_VERSION}_${KERNEL_FULL_VER}_Next_${KSUVER}_${SUSVER}.zip"
         ARTIFACTS_DIR="$CONFIG_DIR/artifacts"
         mkdir -p "$ARTIFACTS_DIR"
-    
+      
         echo "Creating flashable zip: $ZIP_NAME"
         ( cd "$GITHUB_WORKSPACE/AnyKernel3" && zip -r "$ARTIFACTS_DIR/$ZIP_NAME" ./* >/dev/null )
-    
+      
         # Keep only the flashable zip and the model metadata file (assumed already created earlier)
         find "$ARTIFACTS_DIR" -maxdepth 1 -type f ! -name "$ZIP_NAME" ! -name "${OP_MODEL}.txt" -delete
-    
+      
         # Output for later steps (optional)
         echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
 
@@ -655,7 +708,8 @@ runs:
       run: |
         set -euo pipefail
         {
-          echo "Model: ${OP_MODEL}"
+          echo "Model: ${{ env.OP_MODEL }}"
+          echo "OS Version: ${{ env.OP_OS_VERSION }}"
           echo "Android: ${{ env.ANDROID_VER }}"
           echo "Kernel base: ${{ env.KERNEL_VER }}"
           echo "Kernel full: ${{ env.KERNEL_FULL_VER }}"
@@ -672,8 +726,8 @@ runs:
         {
           echo "### Kernel Build Summary"
           echo ""
-          echo "- Model: ${OP_MODEL}"
-          echo "- Android: ${{ env.ANDROID_VER }}"
+          echo "- Model: ${{ env.OP_MODEL }}"
+          echo "- OS Version: ${{ env.OP_OS_VERSION }}"
           echo "- Kernel Version: ${{ steps.save_metadata.outputs.kernel_version }}"
           echo "- Kernel Uname: ${{ env.KERNEL_UNAME }}"
           echo "- KSUN Version: ${KSUVER:-unknown}"
