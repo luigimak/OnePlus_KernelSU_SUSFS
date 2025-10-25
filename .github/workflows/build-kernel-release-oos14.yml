@@ -94,7 +94,7 @@ jobs:
             model="${models[$i]}"
             file="configs/oos15/$model.json"
             if [ -f "$file" ]; then
-              jq -r '.' "$file" >> matrix.json
+              jq '.' "$file" >> matrix.json
               if [ $((i+1)) -lt ${#models[@]} ]; then
                 echo "," >> matrix.json
               fi
