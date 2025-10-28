@@ -60,10 +60,9 @@ runs:
         os_version="$OP_OS_VERSION"
         hmbird="$OP_HMBIRD"
         bbg="$OP_BBG"
-        manual_hooks="$OP_MANUAL_HOOKS"
         bbr="$OP_BBR"
         ttl="$OP_TTL"
-        ip="$OP_IP"
+        ip_set="$OP_IP_SET"
         optimize='${{ inputs.optimize_level }}'
       
         # Initialize an array to collect errors
@@ -146,13 +145,6 @@ runs:
           errors+=("Input 'bbg' contains invalid characters. Allowed: 'true' or 'false'. Got: '$bbg'")
         fi
       
-        # manual_hooks: allow number in X.Y format
-        if [[ -z "$manual_hooks" ]]; then
-          errors+=("Input 'manual_hooks' cannot be empty")
-        elif ! [[ "$manual_hooks" =~ ^[0-9]+\.[0-9]+$ ]]; then
-          errors+=("Input 'manual_hooks' contains invalid characters. Allowed: number in X.Y format. Got: '$manual_hooks'")
-        fi
-      
         # bbr: allow 'true' or 'false'
         if [[ -z "$bbr" ]]; then
           errors+=("Input 'bbr' cannot be empty")
@@ -167,11 +159,11 @@ runs:
           errors+=("Input 'ttl' contains invalid characters. Allowed: 'true' or 'false'. Got: '$ttl'")
         fi
       
-        # ip: allow 'true' or 'false'
-        if [[ -z "$ip" ]]; then
-          errors+=("Input 'ip' cannot be empty")
-        elif [[ "$ip" != "true" && "$ip" != "false" ]]; then
-          errors+=("Input 'ip' contains invalid characters. Allowed: 'true' or 'false'. Got: '$ip'")
+        # ip_set: allow 'true' or 'false'
+        if [[ -z "$ip_set" ]]; then
+          errors+=("Input 'ip_set' cannot be empty")
+        elif [[ "$ip_set" != "true" && "$ip_set" != "false" ]]; then
+          errors+=("Input 'ip_set' contains invalid characters. Allowed: 'true' or 'false'. Got: '$ip_set'")
         fi
       
         # Optimize level validation
@@ -481,7 +473,7 @@ runs:
       run: |
         set -euo pipefail
         cd "$CONFIG/kernel_platform/common"
-        patch -p1 < ../../../kernel_patches/next/scope_min_manual_hooks_v${{ env.OP_MANUAL_HOOKS }}.patch
+        patch -p1 < ../../../kernel_patches/next/scope_min_manual_hooks_v1.4.patch
 
     - name: Add KernelSU-Next and SUSFS Configuration Settings
       shell: bash
@@ -548,7 +540,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        if [ "$OP_IP" = true ]; then
+        if [ "$OP_IP_SET" = true ]; then
           cd "$CONFIG/kernel_platform"
           cat >> common/arch/arm64/configs/gki_defconfig <<EOF
         CONFIG_IP_SET=y
@@ -571,7 +563,7 @@ runs:
         CONFIG_IP_SET_LIST_SET=y
         EOF
         else
-          echo "OP_IP = $OP_IP, skipping IP SET Support"
+          echo "OP_IP_SET = $OP_IP_SET, skipping IP SET Support"
         fi
 
     - name: Add Build based configs

@@ -8,8 +8,7 @@
   "os_version": "OOS15",
   "hmbird": false,
   "bbg": true,
-  "manual_hooks": 1.4,
   "bbr": true,
   "ttl": true,
-  "ip": true
+  "ip_set": true
 }
