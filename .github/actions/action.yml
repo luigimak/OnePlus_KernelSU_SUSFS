@@ -59,80 +59,125 @@ runs:
         kernel_version="$OP_KERNEL_VERSION"
         os_version="$OP_OS_VERSION"
         hmbird="$OP_HMBIRD"
+        bbg="$OP_BBG"
+        manual_hooks="$OP_MANUAL_HOOKS"
+        bbr="$OP_BBR"
+        ttl="$OP_TTL"
+        ip="$OP_IP"
         optimize='${{ inputs.optimize_level }}'
       
         # Initialize an array to collect errors
         errors=()
       
-        # Non-empty checks
+        # Non-empty checks & Basic format checks
+        # model: allow start with 'OP'
         if [[ -z "$model" ]]; then
           errors+=("Input 'model' cannot be empty")
-        fi
-        if [[ -z "$soc" ]]; then
-          errors+=("Input 'soc' cannot be empty")
-        fi
-        if [[ -z "$branch" ]]; then
-          errors+=("Input 'branch' cannot be empty")
-        fi
-        if [[ -z "$manifest" ]]; then
-          errors+=("Input 'manifest' cannot be empty")
-        fi
-        if [[ -z "$android_version" ]]; then
-          errors+=("Input 'android_version' cannot be empty")
-        fi
-        if [[ -z "$kernel_version" ]]; then
-          errors+=("Input 'kernel_version' cannot be empty")
-        fi
-        if [[ -z "$os_version" ]]; then
-          errors+=("Input 'os_version' cannot be empty")
-        fi
-        if [[ -z "$hmbird" ]]; then
-          errors+=("Input 'hmbird' cannot be empty")
+        elif [[ ! "$model" =~ ^OP ]]; then
+          errors+=("Input 'model' does not start with 'OP'. Got: '$model'")
         fi
       
-        # Basic format checks
         # soc: allow letters, digits, underscores, dashes (e.g., sm8650)
-        if [[ -n "$soc" && ! "$soc" =~ ^[A-Za-z0-9_-]+$ ]]; then
-          errors+=("Input 'soc' contains invalid characters. Allowed: letters, digits, underscore, dash")
+        if [[ -z "$soc" ]]; then
+          errors+=("Input 'soc' cannot be empty")
+        elif [[ ! "$soc" =~ ^[A-Za-z0-9_-]+$ ]]; then
+          errors+=("Input 'soc' contains invalid characters. Allowed: letters, digits, underscore, dash. Got: '$soc'")
         fi
+      
         # branch: allow common ref patterns; spaces not allowed
-        if [[ -n "$branch" && ! "$branch" =~ ^[A-Za-z0-9._/-]+$ ]]; then
-          errors+=("Input 'branch' contains invalid characters. Allowed: letters, digits, ., _, -, /")
+        if [[ -z "$branch" ]]; then
+          errors+=("Input 'branch' cannot be empty")
+        elif [[ ! "$branch" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+          errors+=("Input 'branch' contains invalid characters. Allowed: letters, digits, ., _, -, /. Got: '$branch'")
         fi
+      
         # manifest: either HTTPS URL ending with .xml, or a filename ending with .xml (no spaces)
-        if [[ -n "$manifest" ]]; then
-          if [[ "$manifest" == http*://* ]]; then
-            if [[ ! "$manifest" =~ ^https:// ]]; then
-              errors+=("Manifest URL must be HTTPS")
-            fi
-            if [[ ! "$manifest" =~ \.xml($|\?) ]]; then
-              errors+=("Manifest URL should point to an XML file (.xml)")
-            fi
-          else
-            if [[ ! "$manifest" =~ \.xml$ ]]; then
-              errors+=("Manifest filename must end with .xml")
-            fi
-            if [[ "$manifest" =~ [[:space:]] ]]; then
-              errors+=("Manifest filename cannot contain spaces")
-            fi
+        if [[ -z "$manifest" ]]; then
+          errors+=("Input 'manifest' cannot be empty")
+        elif [[ "$manifest" == http*://* ]]; then
+          if [[ ! "$manifest" =~ ^https:// ]]; then
+            errors+=("Manifest URL must be HTTPS. Got: '$manifest'")
+          fi
+          if [[ ! "$manifest" =~ \.xml($|\?) ]]; then
+            errors+=("Manifest URL should point to an XML file (.xml). Got: '$manifest'")
+          fi
+        else
+          if [[ ! "$manifest" =~ \.xml$ ]]; then
+            errors+=("Manifest filename must end with .xml. Got: '$manifest'")
+          fi
+          if [[ "$manifest" =~ [[:space:]] ]]; then
+            errors+=("Manifest filename cannot contain spaces. Got: '$manifest'")
           fi
         fi
-        # android_version
-        if [[ -n "$android_version" && ! "$android_version" =~ ^android[0-9]+$ ]]; then
-          errors+=("Input 'android_version' contains invalid characters. Allowed: android followed by a number")
+      
+        # android_version: allow android followed by a number
+        if [[ -z "$android_version" ]]; then
+          errors+=("Input 'android_version' cannot be empty")
+        elif [[ ! "$android_version" =~ ^android[0-9]+$ ]]; then
+          # Se non è vuoto, controlla il formato specifico
+          errors+=("Input 'android_version' contains invalid characters. Allowed: android followed by a number. Got: '$android_version'")
         fi
-        # kernel_version
-        if [[ -n "$kernel_version" && ! "$kernel_version" =~ ^[0-9]+\.[0-9]+$ ]]; then
-          errors+=("Input 'kernel_version' contains invalid characters. Allowed: number in X.Y format")
+      
+        # kernel_version: allow number in X.Y format
+        if [[ -z "$kernel_version" ]]; then
+          errors+=("Input 'kernel_version' cannot be empty")
+        elif [[ ! "$kernel_version" =~ ^[0-9]+\.[0-9]+$ ]]; then
+          errors+=("Input 'kernel_version' contains invalid characters. Allowed: number in X.Y format. Got: '$kernel_version'")
         fi
-        # hmbird
-        if [[ -n "$hmbird" && "$hmbird" != "true" && "$hmbird" != "false" ]]; then
-          errors+=("Input 'hmbird' contains invalid characters. Allowed: 'true' or 'false'")
+      
+        # os_version: allow start with 'OOS'
+        if [[ -z "$os_version" ]]; then
+          errors+=("Input 'os_version' cannot be empty")
+        elif [[ ! "$os_version" =~ ^OOS ]]; then
+          errors+=("Input 'os_version' does not start with 'OOS'. Got: '$os_version'")
         fi
+      
+        # hmbird: allow 'true' or 'false'
+        if [[ -z "$hmbird" ]]; then
+          errors+=("Input 'hmbird' cannot be empty")
+        elif [[ "$hmbird" != "true" && "$hmbird" != "false" ]]; then
+          errors+=("Input 'hmbird' contains invalid characters. Allowed: 'true' or 'false'. Got: '$hmbird'")
+        fi
+      
+        # bbg: allow 'true' or 'false'
+        if [[ -z "$bbg" ]]; then
+          errors+=("Input 'bbg' cannot be empty")
+        elif [[ "$bbg" != "true" && "$bbg" != "false" ]]; then
+          errors+=("Input 'bbg' contains invalid characters. Allowed: 'true' or 'false'. Got: '$bbg'")
+        fi
+      
+        # manual_hooks: allow number in X.Y format
+        if [[ -z "$manual_hooks" ]]; then
+          errors+=("Input 'manual_hooks' cannot be empty")
+        elif ! [[ "$manual_hooks" =~ ^[0-9]+\.[0-9]+$ ]]; then
+          errors+=("Input 'manual_hooks' contains invalid characters. Allowed: number in X.Y format. Got: '$manual_hooks'")
+        fi
+      
+        # bbr: allow 'true' or 'false'
+        if [[ -z "$bbr" ]]; then
+          errors+=("Input 'bbr' cannot be empty")
+        elif [[ "$bbr" != "true" && "$bbr" != "false" ]]; then
+          errors+=("Input 'bbr' contains invalid characters. Allowed: 'true' or 'false'. Got: '$bbr'")
+        fi
+      
+        # ttl: allow 'true' or 'false'
+        if [[ -z "$ttl" ]]; then
+          errors+=("Input 'ttl' cannot be empty")
+        elif [[ "$ttl" != "true" && "$ttl" != "false" ]]; then
+          errors+=("Input 'ttl' contains invalid characters. Allowed: 'true' or 'false'. Got: '$ttl'")
+        fi
+      
+        # ip: allow 'true' or 'false'
+        if [[ -z "$ip" ]]; then
+          errors+=("Input 'ip' cannot be empty")
+        elif [[ "$ip" != "true" && "$ip" != "false" ]]; then
+          errors+=("Input 'ip' contains invalid characters. Allowed: 'true' or 'false'. Got: '$ip'")
+        fi
+      
         # Optimize level validation
         case "$optimize" in
           O2|O3) ;;
-          *) errors+=("optimize_level must be O2 or O3; got '$optimize'"); ;;
+          *) errors+=("optimize_level must be O2 or O3. Got: '$optimize'"); ;;
         esac
       
         # Check for errors and act accordingly
@@ -280,11 +325,15 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        cd "$CONFIG/kernel_platform"
-        echo "Adding BBG..."
-        wget -O- https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash
-        echo "CONFIG_BBG=y" >> common/arch/arm64/configs/gki_defconfig
-        sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/lockdown/lockdown,baseband_guard/ } }' common/security/Kconfig
+        if [ "$OP_BBG" = true ]; then
+          cd "$CONFIG/kernel_platform"
+          echo "Adding BBG..."
+          wget -O- https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash
+          echo "CONFIG_BBG=y" >> common/arch/arm64/configs/gki_defconfig
+          sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/lockdown/lockdown,baseband_guard/ } }' common/security/Kconfig
+        else
+          echo "OP_BBG = $OP_BBG, skipping BBG"
+        fi
 
     - name: Add KernelSU Next
       shell: bash
@@ -432,7 +481,7 @@ runs:
       run: |
         set -euo pipefail
         cd "$CONFIG/kernel_platform/common"
-        patch -p1 < ../../../kernel_patches/next/scope_min_manual_hooks_v1.4.patch
+        patch -p1 < ../../../kernel_patches/next/scope_min_manual_hooks_v${{ env.OP_MANUAL_HOOKS }}.patch
 
     - name: Add KernelSU-Next and SUSFS Configuration Settings
       shell: bash
@@ -468,31 +517,40 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        cd "$CONFIG/kernel_platform"
-        cat >> common/arch/arm64/configs/gki_defconfig <<EOF
+        if [ "$OP_BBR" = true ]; then
+          cd "$CONFIG/kernel_platform"
+          cat >> common/arch/arm64/configs/gki_defconfig <<EOF
         CONFIG_TCP_CONG_ADVANCED=y
         CONFIG_TCP_CONG_BBR=y
         CONFIG_NET_SCH_FQ=y
         CONFIG_NET_SCH_FQ_CODEL=y
         EOF
+        else
+          echo "OP_BBR = $OP_BBR, skipping Oneplus BBR"
+        fi
 
     - name: Add TTL Target Support
       shell: bash
       run: |
         set -euo pipefail
-        cd "$CONFIG/kernel_platform"
-        cat >> common/arch/arm64/configs/gki_defconfig <<EOF
+        if [ "$OP_TTL" = true ]; then
+          cd "$CONFIG/kernel_platform"
+          cat >> common/arch/arm64/configs/gki_defconfig <<EOF
         CONFIG_IP_NF_TARGET_TTL=y
         CONFIG_IP6_NF_TARGET_HL=y
         CONFIG_IP6_NF_MATCH_HL=y
         EOF
+        else
+          echo "OP_TTL = $OP_TTL, skipping TTL Target Support"
+        fi
 
     - name: Add IP SET Support
       shell: bash
       run: |
         set -euo pipefail
-        cd "$CONFIG/kernel_platform"
-        cat >> common/arch/arm64/configs/gki_defconfig <<EOF
+        if [ "$OP_IP" = true ]; then
+          cd "$CONFIG/kernel_platform"
+          cat >> common/arch/arm64/configs/gki_defconfig <<EOF
         CONFIG_IP_SET=y
         CONFIG_IP_SET_MAX=65534
         CONFIG_IP_SET_BITMAP_IP=y
@@ -512,6 +570,9 @@ runs:
         CONFIG_IP_SET_HASH_NETIFACE=y
         CONFIG_IP_SET_LIST_SET=y
         EOF
+        else
+          echo "OP_IP = $OP_IP, skipping IP SET Support"
+        fi
 
     - name: Add Build based configs
       shell: bash
