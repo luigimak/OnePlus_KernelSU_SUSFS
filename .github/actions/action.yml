@@ -314,18 +314,16 @@ runs:
         df -h
 
     - name: Add BBG
+      if: ${{ env.OP_BBG == 'true' }}
       shell: bash
       run: |
         set -euo pipefail
-        if [ "$OP_BBG" = true ]; then
-          cd "$CONFIG/kernel_platform"
-          echo "Adding BBG..."
-          wget -O- https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash
-          echo "CONFIG_BBG=y" >> common/arch/arm64/configs/gki_defconfig
-          sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/lockdown/lockdown,baseband_guard/ } }' common/security/Kconfig
-        else
-          echo "OP_BBG = $OP_BBG, skipping BBG"
-        fi
+        cd "$CONFIG/kernel_platform"
+        echo "Adding BBG..."
+        wget -O- https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash
+        echo "CONFIG_BBG=y" >> common/arch/arm64/configs/gki_defconfig
+        sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/lockdown/lockdown,baseband_guard/ } }' common/security/Kconfig
+
 
     - name: Add KernelSU Next
       shell: bash
@@ -506,43 +504,37 @@ runs:
         EOF
 
     - name: Add Oneplus BBR
+      if: ${{ env.OP_BBR == 'true' }}
       shell: bash
       run: |
         set -euo pipefail
-        if [ "$OP_BBR" = true ]; then
-          cd "$CONFIG/kernel_platform"
-          cat >> common/arch/arm64/configs/gki_defconfig <<EOF
+        cd "$CONFIG/kernel_platform"
+        cat >> common/arch/arm64/configs/gki_defconfig <<EOF
         CONFIG_TCP_CONG_ADVANCED=y
         CONFIG_TCP_CONG_BBR=y
         CONFIG_NET_SCH_FQ=y
         CONFIG_NET_SCH_FQ_CODEL=y
         EOF
-        else
-          echo "OP_BBR = $OP_BBR, skipping Oneplus BBR"
-        fi
 
     - name: Add TTL Target Support
+      if: ${{ env.OP_TTL == 'true' }}
       shell: bash
       run: |
         set -euo pipefail
-        if [ "$OP_TTL" = true ]; then
-          cd "$CONFIG/kernel_platform"
-          cat >> common/arch/arm64/configs/gki_defconfig <<EOF
+        cd "$CONFIG/kernel_platform"
+        cat >> common/arch/arm64/configs/gki_defconfig <<EOF
         CONFIG_IP_NF_TARGET_TTL=y
         CONFIG_IP6_NF_TARGET_HL=y
         CONFIG_IP6_NF_MATCH_HL=y
         EOF
-        else
-          echo "OP_TTL = $OP_TTL, skipping TTL Target Support"
-        fi
 
     - name: Add IP SET Support
+      if: ${{ env.OP_IP_SET == 'true' }}
       shell: bash
       run: |
         set -euo pipefail
-        if [ "$OP_IP_SET" = true ]; then
-          cd "$CONFIG/kernel_platform"
-          cat >> common/arch/arm64/configs/gki_defconfig <<EOF
+        cd "$CONFIG/kernel_platform"
+        cat >> common/arch/arm64/configs/gki_defconfig <<EOF
         CONFIG_IP_SET=y
         CONFIG_IP_SET_MAX=65534
         CONFIG_IP_SET_BITMAP_IP=y
@@ -562,9 +554,6 @@ runs:
         CONFIG_IP_SET_HASH_NETIFACE=y
         CONFIG_IP_SET_LIST_SET=y
         EOF
-        else
-          echo "OP_IP_SET = $OP_IP_SET, skipping IP SET Support"
-        fi
 
     - name: Add Build based configs
       shell: bash
