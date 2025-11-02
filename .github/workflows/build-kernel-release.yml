@@ -1,4 +1,4 @@
-name: OOS14 Build and Release OnePlus Kernels
+name: Build and Release OnePlus Kernels
 
 permissions:
   contents: write
@@ -17,11 +17,37 @@ on:
         required: true
         type: choice
         options:
-          - OP12
-          - OP11
-          - OP11r
-          - OP-ACE-3-PRO
-        default: OP11
+          - OP13-CPH
+          - OP13-PJZ
+          - OP13r
+          - OP13S
+          - OP13T
+          - OP12_oos15
+          - OP12_oos14
+          - OP12r
+          - OP11_oos15
+          - OP11_oos14
+          - OP11r_oos15
+          - OP11r_oos14
+          - OP10pro
+          - OP10t
+          - OP-Nord-5
+          - OP-NORD-4
+          - OP-NORD-4-CE
+          - OP-NORD-CE4-LITE
+          - OP-ACE-5-PRO
+          - OP-ACE-5
+          - OP-ACE-3-PRO_oos15
+          - OP-ACE-3-PRO_oos14
+          - OP-ACE-3V
+          - OP-ACE-2-PRO
+          - OP-ACE-2
+          - OP-OPEN
+          - OP-PAD-3
+          - OP-PAD-2-PRO
+          - OP-PAD-2
+          - OP-PAD-PRO
+        default: OP11_oos15
       ksun_branch:
         description: 'Enter KernelSU Next Branch or commit hash (blank for stable tag)'
         required: true
@@ -70,7 +96,7 @@ jobs:
           repository: WildKernels/OnePlus_KernelSU_SUSFS
           ref: main
           sparse-checkout: |
-            configs/oos14/
+            configs/
           sparse-checkout-cone-mode: false
 
       - name: Setup OnePlus Model
@@ -78,42 +104,66 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          declare -a models=()
-          while IFS= read -r -d '' file; do
-            model=$(basename "$file" .json)
-            models+=("$model")
-          done < <(find configs/oos14/ -name "*.json" -print0)
+          input_model="${{ github.event.inputs.op_model }}"
+          json_file_path=""
         
-          if [ ${#models[@]} -eq 0 ]; then
-            echo "Error: No config files found in configs/oos14/ directory!"
+          if [[ "$input_model" == *_oos14 ]]; then
+            base_name="${input_model%_oos14}"
+            potential_path="configs/oos14/${base_name}.json"
+            if [ -f "$potential_path" ]; then
+              json_file_path="$potential_path"
+            fi
+          elif [[ "$input_model" == *_oos15 ]]; then
+            base_name="${input_model%_oos15}"
+            potential_path="configs/oos15/${base_name}.json"
+            if [ -f "$potential_path" ]; then
+              json_file_path="$potential_path"
+            fi
+          elif [[ "$input_model" == *_oos16 ]]; then
+            base_name="${input_model%_oos16}"
+            potential_path="configs/oos16/${base_name}.json"
+            if [ -f "$potential_path" ]; then
+              json_file_path="$potential_path"
+            fi
+          else
+            for dir in configs/oos*/; do
+              if [ -d "$dir" ]; then
+                potential_path="${dir}${input_model}.json"
+                if [ -f "$potential_path" ]; then
+                  if [ -z "$json_file_path" ]; then
+                    json_file_path="$potential_path"
+                  else
+                    echo "Error: Ambiguous model name '$input_model'. Found multiple config files:" >&2
+                    echo "  - $json_file_path" >&2
+                    echo "  - $potential_path" >&2
+                    exit 1
+                  fi
+                fi
+              fi
+            done
+          fi
+        
+          if [ -z "$json_file_path" ] || [ ! -f "$json_file_path" ]; then
+            echo "Error: Config file for model '$input_model' not found in expected locations." >&2
             exit 1
           fi
         
+          echo "Found config file: $json_file_path"
+        
+          json_content=$(cat "$json_file_path")
+        
           echo "[" > matrix.json
-          for i in "${!models[@]}"; do
-            model="${models[$i]}"
-            file="configs/oos14/$model.json"
-            if [ -f "$file" ]; then
-              jq -r '.' "$file" >> matrix.json
-              if [ $((i+1)) -lt ${#models[@]} ]; then
-                echo "," >> matrix.json
-              fi
-            fi
-          done
+          echo "$json_content" >> matrix.json
           echo "]" >> matrix.json
         
-          input="${{ github.event.inputs.op_model }}"
-          jq_filter="map(select(.model == \"$input\"))"
-        
-          filtered=$(jq -c "$jq_filter" matrix.json)
-          wrapped=$(jq -n --argjson items "$filtered" '{ include: $items }')
+          wrapped=$(jq -n --argjson items "$(cat matrix.json)" '{ include: $items }')
         
           echo "matrix<<MATRIX_EOF" >> "$GITHUB_OUTPUT"
           echo "$wrapped" >> "$GITHUB_OUTPUT"
           echo "MATRIX_EOF" >> "$GITHUB_OUTPUT"
 
   build:
-    name: build (${{ matrix.model }}, ${{ matrix.soc }}, ${{ matrix.branch }}, ${{ matrix.manifest }}, ${{ matrix.android_version }}, ${{ matrix.kernel_version }}, ${{ inputs.ksun_branch }})
+    name: build (${{ matrix.model }}, ${{ matrix.soc }}, ${{ matrix.branch }}, ${{ matrix.manifest }}, ${{ matrix.android_version }}, ${{ matrix.kernel_version }}, ${{ matrix.os_version }}, ${{ inputs.ksun_branch }})
     needs: set-op-model
     runs-on: ubuntu-latest
     strategy:
@@ -161,7 +211,7 @@ jobs:
       REPO_OWNER: ${{ github.repository_owner }}
       REPO_NAME: ${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_NAME: '*TEST BUILD* OOS14 OnePlus Kernels With KernelSU Next & SUSFS v1.5.12 *TEST BUILD*'
+      RELEASE_NAME: '*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v1.5.12 *TEST BUILD*'
       RELEASE_NOTES: |
         This release contains KernelSU Next and SUSFS v1.5.12
         
