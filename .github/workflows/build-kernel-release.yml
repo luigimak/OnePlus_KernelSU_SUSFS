@@ -1,4 +1,4 @@
-name: OOS14 Build and Release OnePlus Kernels
+name: Build and Release OnePlus Kernels
 
 permissions:
   contents: write
@@ -17,12 +17,13 @@ on:
         required: true
         type: choice
         options:
-          - ALL
-          - OP12
-          - OP11
-          - OP11r
-          - OP-ACE-3-PRO
-        default: ALL
+          - OOS14+15+16
+          - OOS15+16
+          - OOS14+15
+          - OOS16
+          - OOS15
+          - OOS14
+        default: OOS15
       ksun_branch:
         description: 'Enter KernelSU Next Branch or commit hash (blank for stable tag)'
         required: true
@@ -69,7 +70,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           sparse-checkout: |
-            configs/oos14/
+            configs/
           sparse-checkout-cone-mode: false
 
       - name: Setup OnePlus Model
@@ -77,51 +78,60 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          declare -a models=()
-          while IFS= read -r -d '' file; do
-            model=$(basename "$file" .json)
-            models+=("$model")
-          done < <(find configs/oos14/ -name "*.json" -print0)
+          input="${{ github.event.inputs.op_model }}"
+          declare -a json_files=()
         
-          if [ ${#models[@]} -eq 0 ]; then
-            echo "Error: No config files found in configs/oos14/ directory!"
+          case "$input" in
+            OOS14+15+16)
+              mapfile -t json_files < <(find configs/oos14/ configs/oos15/ configs/oos16/ -name "*.json" -print0 | xargs -0 -n1)
+              ;;
+            OOS15+16)
+              mapfile -t json_files < <(find configs/oos15/ configs/oos16/ -name "*.json" -print0 | xargs -0 -n1)
+              ;;
+            OOS14+15)
+              mapfile -t json_files < <(find configs/oos14/ configs/oos15/ -name "*.json" -print0 | xargs -0 -n1)
+              ;;
+            OOS16)
+              mapfile -t json_files < <(find configs/oos16/ -name "*.json" -print0 | xargs -0 -n1)
+              ;;
+            OOS15)
+              mapfile -t json_files < <(find configs/oos15/ -name "*.json" -print0 | xargs -0 -n1)
+              ;;
+            OOS14)
+              mapfile -t json_files < <(find configs/oos14/ -name "*.json" -print0 | xargs -0 -n1)
+              ;;
+            *)
+              echo "Invalid op_model input: $input"
+              exit 1
+              ;;
+          esac
+        
+          if [ ${#json_files[@]} -eq 0 ]; then
+            echo "Error: No config files found for input '$input' in the specified directories!" >&2
             exit 1
           fi
         
           echo "[" > matrix.json
-          for i in "${!models[@]}"; do
-            model="${models[$i]}"
-            file="configs/oos14/$model.json"
+          for i in "${!json_files[@]}"; do
+            file="${json_files[$i]}"
             if [ -f "$file" ]; then
-              jq -r '.' "$file" >> matrix.json
-              if [ $((i+1)) -lt ${#models[@]} ]; then
+              json_content=$(cat "$file")
+              echo "$json_content" >> matrix.json
+              if [ $((i+1)) -lt ${#json_files[@]} ]; then
                 echo "," >> matrix.json
               fi
             fi
           done
           echo "]" >> matrix.json
         
-          input="${{ github.event.inputs.op_model }}"
-          jq_filter="."
-        
-          if [[ "$input" == "ALL" ]]; then
-            :
-          elif [[ "$input" == android*-* ]]; then
-            IFS='-' read -r av kv <<< "$input"
-            jq_filter="map(select(.android_version == \"$av\" and .kernel_version == \"$kv\"))"
-          else
-            jq_filter="map(select(.model == \"$input\"))"
-          fi
-        
-          filtered=$(jq -c "$jq_filter" matrix.json)
-          wrapped=$(jq -n --argjson items "$filtered" '{ include: $items }')
+          wrapped=$(jq -n --argjson items "$(cat matrix.json)" '{ include: $items }')
         
           echo "matrix<<MATRIX_EOF" >> "$GITHUB_OUTPUT"
           echo "$wrapped" >> "$GITHUB_OUTPUT"
           echo "MATRIX_EOF" >> "$GITHUB_OUTPUT"
 
   build:
-    name: build (${{ matrix.model }}, ${{ matrix.soc }}, ${{ matrix.branch }}, ${{ matrix.manifest }}, ${{ matrix.android_version }}, ${{ matrix.kernel_version }}, ${{ inputs.ksun_branch }})
+    name: build (${{ matrix.model }}, ${{ matrix.soc }}, ${{ matrix.branch }}, ${{ matrix.manifest }}, ${{ matrix.android_version }}, ${{ matrix.kernel_version }}, ${{ matrix.os_version }}, ${{ inputs.ksun_branch }})
     needs: set-op-model
     runs-on: ubuntu-latest
     strategy:
@@ -170,7 +180,7 @@ jobs:
       REPO_OWNER: ${{ github.repository_owner }}
       REPO_NAME: ${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_NAME: '*TEST BUILD* OOS14 OnePlus Kernels With KernelSU Next & SUSFS v1.5.12 *TEST BUILD*'
+      RELEASE_NAME: '*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v1.5.12 *TEST BUILD*'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -222,7 +232,8 @@ jobs:
           # Generate table rows
           for file in $(find downloaded-artifacts -name "*.txt" -type f | sort); do
             if [ -f "$file" ]; then
-              model=$(basename "$file" .txt)
+              full_model=$(basename "$file" .txt)
+              model=$(echo "$full_model" | sed -E 's/_[^_]*$//')
               os_version=$(sed -n '2p' "$file")
               kernel_version=$(sed -n '1p' "$file")
               if [ -n "$model" ] && [ -n "$os_version" ] && [ -n "$kernel_version" ]; then
