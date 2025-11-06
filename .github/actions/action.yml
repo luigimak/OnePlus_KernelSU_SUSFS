@@ -193,15 +193,19 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        echo "::group::Install dependencies"
-        sudo apt-get -o Acquire::Retries=3 update -qq
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-          git curl ca-certificates build-essential clang lld flex bison \
-          libelf-dev libssl-dev libncurses-dev zlib1g-dev liblz4-tool \
-          libxml2-utils rsync unzip dwarves file python3 ccache jq bc dos2unix
-        sudo apt-get clean
-        echo "✅ Dependencies installed"
-        echo "::endgroup::"
+        if false; then
+          echo "::group::Install dependencies"
+          sudo apt-get -o Acquire::Retries=3 update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            git curl ca-certificates build-essential clang lld flex bison \
+            libelf-dev libssl-dev libncurses-dev zlib1g-dev liblz4-tool \
+            libxml2-utils rsync unzip dwarves file python3 ccache jq bc dos2unix
+          sudo apt-get clean
+          echo "✅ Dependencies installed"
+          echo "::endgroup::"
+        fi
+        echo "Work directory: $(pwd)"
+        rm -rf "$GITHUB_WORKSPACE/$OP_MODEL" || true
 
     - name: Setup Base Environment
       shell: bash
@@ -209,12 +213,20 @@ runs:
         set -euo pipefail
         CONFIG="$OP_MODEL"
         echo "CONFIG=$CONFIG" >> "$GITHUB_ENV"
-        REPO="/usr/local/bin/repo"
+        mkdir -p "$HOME/.local/bin"
+        REPO="$HOME/.local/bin/repo"
         if [ ! -x "$REPO" ]; then
-          curl -s https://storage.googleapis.com/git-repo-downloads/repo -o "$REPO"
-          chmod +x "$REPO"
+          echo "Downloading repo tool..."
+          tmpfile="$(mktemp)"
+          if ! curl -fL https://storage.googleapis.com/git-repo-downloads/repo -o "$tmpfile"; then
+            echo "Failed to download repo tool"; exit 1
+          fi
+          install -m 0755 "$tmpfile" "$REPO"
+          rm -f "$tmpfile"
         fi
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
         echo "REPO=$REPO" >> "$GITHUB_ENV"
+        echo "Repo tool installed at: $REPO"
 
     - name: Initialize and Sync Kernel Source
       shell: bash
