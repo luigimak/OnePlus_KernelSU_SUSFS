@@ -1208,6 +1208,7 @@ runs:
         temp_part2="${kernel_uname_escaped#$prefix_to_remove}"
         kernel_uname_part2=$(echo "$temp_part2" | sed 's/ #[0-9].*//' | sed 's/ *$//' | sed 's/^ *//')
         kernel_uname_part3=$(echo "$kernel_uname_escaped" | sed -n 's/.*#\([0-9].*\)/#\1/p')
+        KERNEL_UNAME_MULTILINE="$kernel_uname_part1<br>$kernel_uname_part2<br>$kernel_uname_part3"
         
         {
           echo "Model: ${{ env.OP_MODEL }}"
@@ -1253,9 +1254,7 @@ runs:
           echo "| **Model** | ${{ env.OP_MODEL }} |"
           echo "| **OS Version** | ${{ env.OP_OS_VERSION }} |"
           echo "| **Kernel Version** | ${{ steps.save_metadata.outputs.kernel_version }} |"
-          echo "| **Kernel Uname** | $kernel_uname_part1 |"
-          echo "| | $kernel_uname_part2 |"
-          echo "| | $kernel_uname_part3 |"
+          echo "| **Kernel Uname** | $KERNEL_UNAME_MULTILINE |"
           echo "| **Build User** | ${{ env.BUILD_USER }} |"
           echo "| **Build Host** | ${{ env.BUILD_HOST }} |"
           echo "| **KSUN Version** | ${KSUVER:-unknown} |"
