@@ -1316,6 +1316,12 @@ runs:
         echo "   SHA256: $ZIP_SHA256"
         echo "::endgroup::"
 
+    - name: Debug artifact path
+      shell: bash
+      run: |
+        echo "Expected zip: ${{ env.CONFIG }}/artifacts/${{ steps.create_zip.outputs.zip_name }}"
+        ls -l "${{ env.CONFIG }}/artifacts/"
+
     - name: Final Build Summary
       shell: bash
       run: |
@@ -1441,6 +1447,6 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: kernel-${{ inputs.ksu_type }}-${{ env.CONFIG }}_${{ env.OP_OS_VERSION }}
-        path: ${{ env.CONFIG }}/artifacts/
+        path: ${{ env.CONFIG }}/artifacts/${{ steps.create_zip.outputs.zip_name }}
         compression-level: 0
         retention-days: 20
