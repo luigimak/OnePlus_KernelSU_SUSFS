@@ -17,18 +17,62 @@ on:
         required: true
         type: choice
         options:
-          - OOS14+15+16
-          - OOS15+16
-          - OOS14+15
-          - OOS16
-          - OOS15
-          - OOS14
-          - android16-6.12
-          - android15-6.6
-          - android14-6.1
-          - android13-5.15
-          - android12-5.10
-        default: OOS15
+          # OOS16
+          - OP13_oos16
+          - OP13r_oos16
+          - OP13S_oos16
+          - OP13T_oos16
+          - OP12_oos16
+          - OP12r_oos16
+          - OP11_oos16
+          - OP-ACE-6_oos16
+          - OP-ACE-5-PRO_oos16
+          - OP-ACE-5_oos16
+          - OP-ACE-3-PRO_oos16
+          - OP-ACE-3V_oos16
+          - OP-ACE-3_oos16
+          - OP-NORD-5_oos16
+          - OP-NORD-4_oos16
+          - OP-PAD-3_oos16
+          - OP-PAD-2-PRO_oos16
+          - OP-PAD-2_oos16
+          - OP-PAD-PRO_oos16
+          - OP-OPEN_oos16
+          # OOS15
+          - OP13-CPH_oos15
+          - OP13-PJZ_oos15
+          - OP13r_oos15
+          - OP13S_oos15
+          - OP13T_oos15
+          - OP12_oos15
+          - OP12r_oos15
+          - OP11_oos15
+          - OP11r_oos15
+          - OP10t_oos15
+          - OP10pro_oos15
+          - OP-ACE-5-PRO_oos15
+          - OP-ACE-5_oos15
+          - OP-ACE-3-PRO_oos15
+          - OP-ACE-3V_oos15
+          - OP-ACE-3_oos15
+          - OP-ACE-2-PRO_oos15
+          - OP-ACE-2_oos15
+          - OP-NORD-5_oos15
+          - OP-NORD-4_oos15
+          - OP-NORD-4-CE_oos15
+          - OP-NORD-CE4-LITE_oos15
+          - OP-PAD-3_oos15
+          - OP-PAD-2-PRO_oos15
+          - OP-PAD-2_oos15
+          - OP-PAD-PRO_oos15
+          - OP-OPEN_oos15
+          # OOS14
+          - OP12_oos14
+          - OP11_oos14
+          - OP11r_oos14
+          - OP-ACE-3-PRO_oos14
+          - OP-PAD-PRO_oos14
+        default: OP11_oos16
       ksu_options:
         description: 'Enter KernelSU build json'
         required: true
@@ -75,6 +119,8 @@ jobs:
       - name: 📥 Checkout Code (to access configs/)
         uses: actions/checkout@v4
         with:
+          repository: WildKernels/OnePlus_KernelSU_SUSFS
+          ref: main
           sparse-checkout: |
             configs/
           sparse-checkout-cone-mode: false
@@ -106,54 +152,28 @@ jobs:
           done
           echo "]" >> matrix.json
           
-          jq_filter="."
+          model_part="${input%_*}"
+          os_part="${input##*_}"
           
-          case "$input" in
-            OOS14+15+16)
-              ;;
-            OOS15+16)
-              jq_filter="map(select(.os_version == \"OOS15\" or .os_version == \"OOS16\"))"
-              ;;
-            OOS14+15)
-              jq_filter="map(select(.os_version == \"OOS14\" or .os_version == \"OOS15\"))"
-              ;;
-            OOS16)
-              jq_filter="map(select(.os_version == \"OOS16\"))"
-              ;;
-            OOS15)
-              jq_filter="map(select(.os_version == \"OOS15\"))"
-              ;;
-            OOS14)
-              jq_filter="map(select(.os_version == \"OOS14\"))"
-              ;;
-            android*-*.*)
-              # Extract android version and kernel version
-              IFS='-' read -r av kv <<< "$input"
-              
-              # Build android*-* only for OOS15 and OOS16
-              jq_filter="map(select(.os_version == \"OOS15\" or .os_version == \"OOS16\")) | map(select(.android_version == \"$av\" and .kernel_version == \"$kv\"))"
-              
-              echo "ℹ️  Android-Kernel filter applied: $av-$kv"
-              echo "   Restricted to: OOS15 and OOS16 only"
-              ;;
-            *)
-              echo "::warning::Unknown input '$input'. Using empty filter."
-              jq_filter="map(select(false))"
-              ;;
-          esac
+          os_version=$(echo "$os_part" | tr '[:lower:]' '[:upper:]')
+          
+          echo "🔍 Parsing input: $input"
+          echo "   Model part: $model_part"
+          echo "   OS part: $os_version"
+          
+          jq_filter="map(select(.model == \"$model_part\" and .os_version == \"$os_version\"))"
           
           filtered=$(jq -c "$jq_filter" matrix.json)
           count=$(jq 'length' <<<"$filtered")
           
           if [ "$count" -eq 0 ]; then
-            echo "::error::No config files found for input '$input' after applying filters!"
+            echo "::error::No config files found for model '$model_part' with OS version '$os_version'!"
             echo ""
             echo "Available configurations:"
-            jq -r '.[] | "  - \(.model) (\(.os_version), \(.android_version)-\(.kernel_version))"' matrix.json
+            jq -r '.[] | "  - \(.model)_\(.os_version | ascii_downcase) (\(.os_version), \(.android_version)-\(.kernel_version))"' matrix.json
             exit 1
           fi
           
-          # For each device + each ksu option → one combined entry
           merged_matrix=$(jq -n --argjson devices "$filtered" --argjson ksu_list "$ksu_options_normalized" '[ $devices[] as $dev | $ksu_list[] as $ksu | ($dev + {ksu_type: $ksu.type, ksu_hash: $ksu.hash}) ]')
           
           final_count=$(echo "$merged_matrix" | jq -s length)
@@ -169,6 +189,7 @@ jobs:
           echo "count=$count" >> "$GITHUB_OUTPUT"
           
           echo "::endgroup::"
+
 
       - name: Upload build matrix
         uses: actions/upload-artifact@v4
@@ -361,9 +382,18 @@ jobs:
         run: |
           echo "config_json=$(jq -nc --argjson m '${{ toJSON(matrix) }}' '$m | del(.ksu_type, .ksu_hash)')" >> "$GITHUB_OUTPUT"
 
+      - name: 📥 Checkout Code (to access manifests/)
+        uses: actions/checkout@v4
+        with:
+          repository: WildKernels/OnePlus_KernelSU_SUSFS
+          ref: main
+          sparse-checkout: |
+            manifests/
+          sparse-checkout-cone-mode: false
+
       - name: 🔨 Build Kernel
         id: build
-        uses: ./.github/actions
+        uses: WildKernels/OnePlus_KernelSU_SUSFS/.github/actions@main
         with:
           op_config_json: ${{ steps.prepare_config.outputs.config_json }}
           ksu_type: ${{ matrix.ksu_type }}
