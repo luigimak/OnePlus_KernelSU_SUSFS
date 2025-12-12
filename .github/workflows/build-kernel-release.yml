@@ -611,7 +611,7 @@ jobs:
             feature_flags=$(jq -r --arg MODEL "$model" '
               .[] | 
               select(.model == $MODEL) |
-              "\(.hmbird // false)\t\(.susfs // false)\t\(.bbr // false)\t\(.bbg // false)\t\(.ttl // false)\t\(.ip_set // false)"
+              "\(.hmbird // false)\t\(.old_hmbird // false)\t\(.susfs // false)\t\(.bbr // false)\t\(.bbg // false)\t\(.ttl // false)\t\(.ip_set // false)"
             ' <<< "$JSON_BUILD_DATA")
             
             features=""
@@ -619,10 +619,11 @@ jobs:
             if [[ -z "$feature_flags" ]]; then
               echo "Warning: No JSON entry found for model: $model" >&2
             else
-              IFS=$'\t' read -r hmbird susfs bbr bbg ttl ip_set <<< "$feature_flags"
+              IFS=$'\t' read -r hmbird old_hmbird susfs bbr bbg ttl ip_set <<< "$feature_flags"
               
               # Build features string based on boolean values
               [[ "$hmbird" == "true" ]] && features+="🐦 HMBIRD "
+              [[ "$old_hmbird" == "true" ]] && features+="🐦 old HMBIRD "
               [[ "$susfs" == "true" ]] && features+="ඞ SusFS "
               [[ "$bbr" == "true" ]] && features+="🚀 BBR "
               [[ "$bbg" == "true" ]] && features+="🛡️ BBG "

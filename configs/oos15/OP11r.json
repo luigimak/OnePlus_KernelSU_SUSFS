@@ -8,6 +8,7 @@
   "os_version": "OOS15",
   "disk_cleanup": false,
   "hmbird": false,
+  "old_hmbird": false,
   "susfs": true,
   "bbg": true,
   "bbr": true,

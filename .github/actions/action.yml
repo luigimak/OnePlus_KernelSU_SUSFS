@@ -90,6 +90,7 @@ runs:
         kernel_version="$OP_KERNEL_VERSION"
         os_version="$OP_OS_VERSION"
         hmbird="$OP_HMBIRD"
+        old_hmbird="$OP_OLD_HMBIRD"
         susfs="$OP_SUSFS"
         bbg="$OP_BBG"
         bbr="$OP_BBR"
@@ -157,6 +158,12 @@ runs:
           errors+=("Input 'hmbird' cannot be empty")
         elif [[ "$hmbird" != "true" && "$hmbird" != "false" ]]; then
           errors+=("Input 'hmbird' contains invalid characters. Allowed: 'true' or 'false'. Got: '$hmbird'")
+        fi
+        
+        if [[ -z "$old_hmbird" ]]; then
+          errors+=("Input 'old_hmbird' cannot be empty")
+        elif [[ "$old_hmbird" != "true" && "$old_hmbird" != "false" ]]; then
+          errors+=("Input 'old_hmbird' contains invalid characters. Allowed: 'true' or 'false'. Got: '$old_hmbird'")
         fi
         
         if [[ -z "$susfs" ]]; then
@@ -824,6 +831,19 @@ runs:
         else
           echo "Hmbird not enabled, skipping fengchi patch"
         fi
+        if [ "$OP_OLD_HMBIRD" = true ]; then
+          (
+            echo "Patching old hmbird!"
+            echo 'obj-y += hmbird_patch.o' >> ./drivers/Makefile
+            patch -p1 -F 3 < "../../../kernel_patches/oneplus/hmbird/old/hmbird_kernel_patch.patch"
+            echo "Patching hmbird files!"
+            cd ./kernel/sched
+            rm -rf ext.c ext.h build_policy.c slim.h slim_sysctl.c
+            patch -p1 -F 3 < "../../../../../kernel_patches/oneplus/hmbird/old/hmbird_files_patch.patch"
+          )
+        else
+          echo "Old Hmbird not enabled, skipping fengchi patch"
+        fi
         
         patch -p1 --forward "../../../kernel_patches/common/optimized_mem_operations.patch"
         patch -p1 --forward "../../../kernel_patches/common/file_struct_8bytes_align.patch"
@@ -1285,6 +1305,11 @@ runs:
         cp "$IMAGE_PATH" "$GITHUB_WORKSPACE/AnyKernel3/Image"
         cd "$GITHUB_WORKSPACE/AnyKernel3"
         
+        if [ "$OP_OLD_HMBIRD" = true ]; then
+          cp "$GITHUB_WORKSPACE/kernel_patches/oneplus/hmbird/old/bins/"* ./tools/ 2>/dev/null || true
+          patch -F 3 < "$GITHUB_WORKSPACE/kernel_patches/oneplus/hmbird/old/ak3_hmbird_patch.patch"
+        fi
+        
         ZIP_NAME="AK3_${OP_MODEL}_${OP_OS_VERSION}_${KERNEL_FULL_VER}_${{ inputs.ksu_type }}_${KSUVER}_${SUSVER}.zip"
         ARTIFACTS_DIR="$CONFIG_DIR/artifacts"
         mkdir -p "$ARTIFACTS_DIR"
@@ -1353,6 +1378,7 @@ runs:
           echo "BBR: ${{ env.OP_BBR }}"
           echo "BBG: ${{ env.OP_BBG }}"
           echo "Hmbird: ${{ env.OP_HMBIRD }}"
+          echo "Old Hmbird: ${{ env.OP_OLD_HMBIRD }}"
           echo "TTL: ${{ env.OP_TTL }}"
           echo "IP_SET: ${{ env.OP_IP_SET }}"
           echo ""
@@ -1414,6 +1440,7 @@ runs:
           echo "| **BBR** | ${{ env.OP_BBR }} |"
           echo "| **BBG** | ${{ env.OP_BBG }} |"
           echo "| **Hmbird** | ${{ env.OP_HMBIRD }} |"
+          echo "| **Old Hmbird** | ${{ env.OP_OLD_HMBIRD }} |"
           echo "| **TTL** | ${{ env.OP_TTL }} |"
           echo "| **IP_SET** | ${{ env.OP_IP_SET }} |"
           
