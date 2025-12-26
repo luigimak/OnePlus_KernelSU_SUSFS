@@ -31,7 +31,7 @@
 	    <th align="center"> Current Kernel Version </th>
 	</tr>
 	<tr> 
-		<td align="center"> Poco X7 Pro<br>Realme GT 7 Pro </td>
+		<td align="center"> Poco X7 Pro(used to work before)<br>Realme GT 7 Pro </td>
 		<td align="center"> OnePlus 13<br>OnePlus Ace 5 Pro </td>
 		<td align="center"> android15-6.6.89<br>android15-6.6.89 </td>
 	</tr>
