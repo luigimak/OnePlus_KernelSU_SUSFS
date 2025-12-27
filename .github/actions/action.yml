@@ -596,7 +596,7 @@ runs:
         fi
         
         git clone --depth=1 https://github.com/TheWildJames/AnyKernel3.git -b "$ANYKERNEL_BRANCH"
-        git clone --depth=1 https://github.com/TheWildJames/kernel_patches.git
+        git clone --depth=1 https://github.com/luigimak/kernel_patches.git
         
         if [ "${{ env.OP_SUSFS }}" = true ]; then
           git clone https://gitlab.com/simonpunk/susfs4ksu.git
@@ -910,6 +910,11 @@ runs:
           echo "Patching hmbird!"
           dos2unix "../../../kernel_patches/oneplus/hmbird/fengchi_${OP_MODEL}_${OP_OS_VERSION}.patch"
           patch -p1 -F 3 < "../../../kernel_patches/oneplus/hmbird/fengchi_${OP_MODEL}_${OP_OS_VERSION}.patch"
+          dos2unix "../../../kernel_patches/oneplus/hmbird/overwriter.patch"
+          patch -p1 -F 3 < "../../../kernel_patches/oneplus/hmbird/overwriter.patch"
+          chmod +x ./drivers/of/overwriter/overwrite_configs/convert_configs.sh
+          dos2unix "../../../kernel_patches/oneplus/hmbird/hmbird.patch"
+          patch -p1 -F 3 < "../../../kernel_patches/oneplus/hmbird/hmbird.patch"
         else
           echo "Hmbird not enabled, skipping fengchi patch"
         fi
