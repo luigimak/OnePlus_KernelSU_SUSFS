@@ -16,6 +16,7 @@
 | OP-NORD-4 | |✅|✅|
 | OP-NORD-4-CE | |✅| |
 | OP-NORD-CE4-LITE | |✅| |
+| OP-ACE-6T | | |✅|
 | OP-ACE-6 | | |✅|
 | OP-ACE-5-PRO | |✅|✅|
 | OP-ACE-5 | |✅|✅|
