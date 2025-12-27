@@ -23,7 +23,7 @@
 | OP-ACE-3-PRO |✅|✅|✅|
 | OP-ACE-3V | |✅|✅|
 | OP-ACE-3 | |✅|✅|
-| OP-ACE-2-PRO | |✅| |
+| OP-ACE-2-PRO | |✅|✅|
 | OP-ACE-2 | |✅| |
 | OP-OPEN | |✅|✅|
 | OP-PAD-3 | |✅|✅|
