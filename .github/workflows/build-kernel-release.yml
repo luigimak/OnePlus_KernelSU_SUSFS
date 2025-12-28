@@ -117,8 +117,8 @@ jobs:
       - name: 📥 Checkout Code (to access configs/)
         uses: actions/checkout@v4
         with:
-          repository: WildKernels/OnePlus_KernelSU_SUSFS
-          ref: main
+          repository: luigimak/OnePlus_KernelSU_SUSFS
+          ref: devices
           sparse-checkout: |
             configs/
           sparse-checkout-cone-mode: false
@@ -388,15 +388,15 @@ jobs:
       - name: 📥 Checkout Code (to access manifests/)
         uses: actions/checkout@v4
         with:
-          repository: WildKernels/OnePlus_KernelSU_SUSFS
-          ref: main
+          repository: luigimak/OnePlus_KernelSU_SUSFS
+          ref: devices
           sparse-checkout: |
             manifests/
           sparse-checkout-cone-mode: false
 
       - name: 🔨 Build Kernel
         id: build
-        uses: WildKernels/OnePlus_KernelSU_SUSFS/.github/actions@main
+        uses: luigimak/OnePlus_KernelSU_SUSFS/.github/actions@main
         with:
           op_config_json: ${{ steps.prepare_config.outputs.config_json }}
           ksu_type: ${{ matrix.ksu_type }}
