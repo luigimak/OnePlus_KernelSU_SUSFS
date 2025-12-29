@@ -14,5 +14,6 @@
   "bbg": true,
   "bbr": true,
   "ttl": true,
-  "ip_set": true
+  "ip_set": true,
+  "uname": "OP-WILD"
 }
