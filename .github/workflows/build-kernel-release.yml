@@ -33,7 +33,7 @@ on:
         description: 'Enter KernelSU build json'
         required: true
         type: string
-        default: '[{"type":"ksun","hash":"dev"}]'
+        default: '[{"type":"ksun","hash":"ad8a8446ef37dbe1bad1c933a96ee2975485882d"}]'
       optimize_level:
         description: "Compiler optimization level"
         required: true
@@ -47,19 +47,19 @@ on:
       android12-5_10_susfs_branch_or_commit:
         description: 'Enter SusFS Branch or commit hash for android12-5.10'
         type: string
-        default: ''      
+        default: '8a76ba240d1f7315352b49d97d854a4b166e5b47'      
       android13-5_15_susfs_branch_or_commit:
         description: 'Enter SusFS Branch or commit hash for android13-5.15'
         type: string
-        default: ''      
+        default: 'babf6be195576f09aae79650d47abf6a76e8a21b'      
       android14-6_1_susfs_branch_or_commit:
         description: 'Enter SusFS Branch or commit hash for android14-6.1'
         type: string
-        default: ''
+        default: 'a162e2469d0b472545e5e46457eee171c0975fb0'
       android15-6_6_susfs_branch_or_commit:
         description: 'Enter SusFS Branch or commit hash for android15-6.6'
         type: string
-        default: ''
+        default: 'f450ec00bf592d080f59b01ff6f9242456c9a427'
       android16-6_12_susfs_branch_or_commit:
         description: 'Enter SusFS Branch or commit hash for android16-6.12'
         type: string
@@ -535,8 +535,8 @@ jobs:
       REPO_OWNER: ${{ github.repository_owner }}
       REPO_NAME: ${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_NAME: '*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v2.0.0 *TEST BUILD*'
-      SUSFS_BASE_VERSION: 'v2.0.0'
+      RELEASE_NAME: '*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v1.5.12 *TEST BUILD*'
+      SUSFS_BASE_VERSION: 'v1.5.12'
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
@@ -804,7 +804,7 @@ jobs:
           ## 📜 Changelog
           
           ### This Release
-          - Updated SUSFS to v2.0.0.
+          - Updated SUSFS to v1.5.12.
           - Added HMBIRD support for all sm8750 devices.
           - Improved ccache build system.
           - Enhanced SUSFS hiding capabilities.
