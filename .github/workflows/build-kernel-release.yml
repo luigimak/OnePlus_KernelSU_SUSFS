@@ -67,7 +67,7 @@ on:
 
 jobs:
   set-op-model:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-24.04]
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       device_count: ${{ steps.set-matrix.outputs.count }}
@@ -75,9 +75,7 @@ jobs:
       - name: 📥 Checkout Code (to access configs/)
         uses: actions/checkout@v4
         with:
-          sparse-checkout: |
-            configs/
-          sparse-checkout-cone-mode: false
+          fetch-depth: 1
 
       - name: 🔍 Generate build matrix
         id: set-matrix
@@ -254,7 +252,7 @@ jobs:
   build:
     name: build (${{ matrix.model }}, ${{ matrix.soc }}, ${{ matrix.branch }}, ${{ matrix.manifest }}, ${{ matrix.android_version }}, ${{ matrix.kernel_version }}, ${{ matrix.os_version }}, ${{ matrix.ksu_type }})
     needs: set-op-model
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-24.04]
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.set-op-model.outputs.matrix) }}
@@ -263,7 +261,7 @@ jobs:
       ksu_ver: ${{ steps.build-stat.outputs.ksu_version }}
     steps:
       - name: 🧹 Emergency Disk Cleanup
-        if: ${{ matrix.disk_cleanup }}
+        if: false
         run: |
           echo "::group::Disk Usage Before Cleanup"
           df -h
@@ -287,7 +285,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Download Apache Arrow's util_free_space.sh
-        if: ${{ matrix.disk_cleanup }}
+        if: false
         run: |
           curl -L -o util_free_space.sh https://raw.githubusercontent.com/apache/arrow/main/ci/scripts/util_free_space.sh
           chmod +x util_free_space.sh
@@ -337,12 +335,19 @@ jobs:
           
           echo "susfs_branch=$susfs_branch" >> "$GITHUB_OUTPUT"
 
+      - name: 🔄 Reset workspace
+        shell: bash
+        run: |
+          rm -rf "$GITHUB_WORKSPACE"
+          mkdir -p "$GITHUB_WORKSPACE"
+
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
       - name: Install Minimal Dependencies
+        if: false # dependencies already present on self-hosted WSL2
         run: |
           set -euo pipefail
           echo "::group::Install dependencies"
@@ -360,11 +365,11 @@ jobs:
           echo "::group::Disk usage pre-build"
           df -h /
           du -sh "$GITHUB_WORKSPACE" 2>/dev/null || true
-          sudo rm -rf /tmp/* || true
+          # sudo rm -rf /tmp/* || true
           echo "::endgroup::"
 
       - name: ♻️ Configure ccache (bounded)
-        if: ${{ inputs.clean_build != true }}
+        if: false # ccache already configured in ~/.ccache/ccache.conf (40G, level 1)
         run: |
           if command -v ccache >/dev/null 2>&1; then
             echo "::group::ccache configuration"
@@ -383,7 +388,7 @@ jobs:
 
       - name: 🔨 Build Kernel
         id: build
-        uses: ./.github/actions
+        uses: luigimak/OnePlus_KernelSU_SUSFS/.github/actions@runner
         with:
           op_config_json: ${{ steps.prepare_config.outputs.config_json }}
           ksu_type: ${{ matrix.ksu_type }}
@@ -529,7 +534,7 @@ jobs:
 
   trigger-release:
     needs: [build]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-24.04]
     if: ${{ inputs.make_release }}
     env:
       REPO_OWNER: ${{ github.repository_owner }}

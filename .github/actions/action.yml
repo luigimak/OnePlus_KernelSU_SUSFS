@@ -72,10 +72,10 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        echo '${{ inputs.op_config_json }}' > /tmp/config.json
-        jq -r 'to_entries[] | "OP_\(.key | ascii_upcase)=\(.value)"' /tmp/config.json >> "$GITHUB_ENV"
+        echo '${{ inputs.op_config_json }}' > "${RUNNER_TEMP}/config.json"
+        jq -r 'to_entries[] | "OP_\(.key | ascii_upcase)=\(.value)"' "${RUNNER_TEMP}/config.json" >> "$GITHUB_ENV"
         echo "Parsed config:"
-        jq '.' /tmp/config.json
+        jq '.' "${RUNNER_TEMP}/config.json"
 
     - name: Validate Inputs
       shell: bash
@@ -231,16 +231,30 @@ runs:
       shell: bash
       if: ${{ env.OP_RUST_BUILD == 'true' }}
       run: |
-        # Install bindgen via cargo (no full rustc needed)
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
-        source $HOME/.cargo/env
-        
-        # Install bindgen CLI only (~50-100MB total)
-        cargo install bindgen-cli --version 0.69.5
-        
-        # Verify
-        bindgen --version
-        which bindgen
+        set -euo pipefail
+        # self-hosted: install rustup/bindgen only if they are not already present
+        if command -v bindgen >/dev/null 2>&1; then
+          echo "✅ bindgen already installed: $(bindgen --version)"
+        else
+          echo "⚙️ bindgen not found, installing..."
+          # Download rustup-init directly to HOME to avoid issues with 
+          # /tmp noexec/tmpfs on WSL2 (the curl pipe uses /tmp internally)
+          RUSTUP_INIT="$HOME/.rustup-init-tmp"
+          curl --proto '=https' --tlsv1.2 -sSf \
+            "https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init" \
+            -o "$RUSTUP_INIT"
+          chmod +x "$RUSTUP_INIT"
+          "$RUSTUP_INIT" -y --default-toolchain none --no-modify-path
+          rm -f "$RUSTUP_INIT"
+          source "$HOME/.cargo/env"
+          cargo install bindgen-cli --version 0.69.5
+          echo "✅ bindgen installed: $(bindgen --version)"
+        fi
+        # Ensures that cargo env is available for subsequent steps
+        if [ -f "$HOME/.cargo/env" ]; then
+          source "$HOME/.cargo/env"
+          echo "PATH=$PATH" >> "$GITHUB_ENV"
+        fi
 
     - name: Show bindgen version
       shell: bash
@@ -481,13 +495,13 @@ runs:
         
         CACHE_DIR="$HOME/.ccache"
         echo "CCACHE_DIR=$CACHE_DIR" >> "$GITHUB_ENV"
-        echo "CCACHE_MAXSIZE=1G" >> "$GITHUB_ENV"
+        # echo "CCACHE_MAXSIZE=1G" >> "$GITHUB_ENV"
         
         mkdir -p "$CACHE_DIR"
         
         echo "Cache configuration:"
         echo "  Directory: $CACHE_DIR"
-        echo "  Max size: 1G"
+        echo "  Max size: from ~/.ccache/ccache.conf (40G)"
         echo "  Android: ${ANDROID_VER:-unknown}"
         echo "  Kernel: ${KERNEL_VER:-unknown}"
         echo "  OOS Version: ${OP_OS_VERSION:-unknown}"
@@ -496,6 +510,7 @@ runs:
         echo "::endgroup::"
     
     - name: Cache ccache
+      if: false  # self-hosted: cache already persistent on disk, actions/cache would cause useless uploads/downloads of 40GB
       uses: actions/cache@v4
       with:
         path: ${{ env.CCACHE_DIR }}
@@ -503,35 +518,12 @@ runs:
         restore-keys: |
           ccache-ksun-v3-${{ env.OP_MODEL }}-${{ env.OP_OS_VERSION }}-${{ env.KERNEL_FULL_VER }}-
           ccache-ksun-v3-${{ env.OP_MODEL }}-${{ env.OP_OS_VERSION }}-
-   
+
     - name: Configure ccache
       shell: bash
       run: |
         set -euo pipefail
         echo "::group::Configure ccache for maximum performance"
-        
-        export CCACHE_DIR="$HOME/.ccache"
-        export CCACHE_MAXSIZE="1G"
-        
-        ccache -M "$CCACHE_MAXSIZE"
-        
-        export CCACHE_COMPILERCHECK="content"
-        export CCACHE_BASEDIR="${GITHUB_WORKSPACE}"
-        export CCACHE_NOHASHDIR="true"
-        
-        ccache -o compression=true
-        ccache -o compression_level=3
-        ccache -o direct_mode=true
-        ccache -o hash_dir=false
-        ccache -o file_clone=true
-        ccache -o inode_cache=true
-        ccache -o umask=002
-        
-        if ccache --help 2>&1 | grep -q 'depend_mode'; then
-          ccache -o depend_mode=true
-        fi
-        
-        ccache -o sloppiness=file_macro,time_macros,include_file_mtime,include_file_ctime,pch_defines,system_headers,locale
         
         export CCACHE_IGNOREOPTIONS="--sysroot*"
         
@@ -542,25 +534,16 @@ runs:
           echo "CCACHE_IGNOREOPTIONS=$CCACHE_IGNOREOPTIONS"
         } >> "$GITHUB_ENV"
         
-        echo "✅ ccache configured for production"
+        echo "✅ ccache env vars configured for this job"
         echo ""
-        echo "Configuration applied:"
-        echo "  Max size: 12G (persisted)"
-        echo "  Base dir: ${GITHUB_WORKSPACE}"
-        echo "  Compression: zstd level 3"
-        echo "  Direct mode: enabled"
-        echo "  File cloning: enabled"
-        echo "  Inode cache: enabled"
+        echo "Active configuration (from ~/.ccache/ccache.conf):"
+        ccache -p | grep -E "(max_size|compression|direct_mode|depend_mode|sloppiness|hard_link|compiler_check)" || true
         echo ""
-        
         if [ -d "$CCACHE_DIR" ] && find "$CCACHE_DIR" -type f -print -quit 2>/dev/null | grep -q .; then
-          echo "✅ Restored cache found"
-          echo ""
           echo "Pre-build cache statistics:"
           ccache -s | head -n 20
         else
           echo "⚠️ No existing cache - building from scratch"
-          echo "Cache will be populated for future builds"
         fi
         
         echo "::endgroup::"
@@ -1364,7 +1347,7 @@ runs:
           echo "ccache: ENABLED"
           echo "  Dir: $CCACHE_DIR"
           echo "  Base: $CCACHE_BASEDIR"
-          echo "  Max size: $CCACHE_MAXSIZE"
+          echo "  Max size: $(ccache -p 2>/dev/null | grep max_size | awk '{print $4}' || echo 'from ccache.conf')"
           echo "  Compression: zstd level 3"
           echo "  Features: readonly_direct, file_clone, inode_cache, depend"
         else
