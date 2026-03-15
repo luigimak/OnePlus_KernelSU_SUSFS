@@ -572,6 +572,7 @@ jobs:
         with:
           name: build-matrix
           path: ./downloaded-artifacts/build-matrix
+          skip-decompress: true
 
       - name: 📝 Generate Device List and Final Release Notes
         id: generate-notes
