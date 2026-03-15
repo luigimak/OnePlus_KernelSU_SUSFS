@@ -566,12 +566,6 @@ jobs:
           merge-multiple: true
           skip-decompress: true
 
-      - name: 📥 Download build matrix
-        uses: actions/download-artifact@v8
-        with:
-          name: build-matrix
-          path: ./downloaded-artifacts/build-matrix
-
       - name: 📝 Generate Device List and Final Release Notes
         id: generate-notes
         run: |
