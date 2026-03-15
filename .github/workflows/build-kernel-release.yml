@@ -175,6 +175,7 @@ jobs:
         with:
           name: build-matrix
           path: matrix.json
+          archive: false
           retention-days: 7
 
       - name: 📊 Build plan summary
