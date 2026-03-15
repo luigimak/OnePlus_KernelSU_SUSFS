@@ -175,6 +175,7 @@ jobs:
         with:
           name: build-matrix
           path: matrix.json
+          archive: false
           retention-days: 7
 
       - name: 📊 Build plan summary
@@ -564,6 +565,7 @@ jobs:
           path: ./downloaded-artifacts
           pattern: AK3_*.zip
           merge-multiple: true
+          skip-decompress: true
 
       - name: 📥 Download build matrix
         uses: actions/download-artifact@v8
@@ -578,6 +580,10 @@ jobs:
           
           # Collect build metadata
           declare -A device_info
+          
+          echo "=== Downloaded artifacts structure ==="
+          find downloaded-artifacts -type f | sort
+          echo "======================================"
           
           JSON_BUILD_DATA=$(jq -c '.' ./downloaded-artifacts/build-matrix/matrix.json)
           
