@@ -564,7 +564,6 @@ jobs:
           path: ./downloaded-artifacts
           pattern: AK3_*.zip
           merge-multiple: true
-          skip-decompress: true
 
       - name: 📥 Download build matrix
         uses: actions/download-artifact@v8
