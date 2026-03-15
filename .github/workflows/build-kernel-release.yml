@@ -578,7 +578,7 @@ jobs:
           find downloaded-artifacts -type f | sort
           echo "======================================"
           
-          JSON_BUILD_DATA=$(jq -c '.' ./downloaded-artifacts/build-matrix/matrix.json)
+          JSON_BUILD_DATA=$(jq -c '.' ./downloaded-artifacts/matrix.json)
           
           for file in $(find downloaded-artifacts -maxdepth 1 -name "AK3_*.zip" -type f | sort); do
             if [ -f "$file" ]; then
