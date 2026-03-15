@@ -562,7 +562,6 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: ./downloaded-artifacts
-          pattern: AK3_*.zip
           merge-multiple: true
           skip-decompress: true
 
