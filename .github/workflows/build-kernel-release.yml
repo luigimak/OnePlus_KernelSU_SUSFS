@@ -175,7 +175,6 @@ jobs:
         with:
           name: build-matrix
           path: matrix.json
-          archive: false
           retention-days: 7
 
       - name: 📊 Build plan summary
@@ -572,7 +571,6 @@ jobs:
         with:
           name: build-matrix
           path: ./downloaded-artifacts/build-matrix
-          skip-decompress: true
 
       - name: 📝 Generate Device List and Final Release Notes
         id: generate-notes
