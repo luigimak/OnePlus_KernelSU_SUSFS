@@ -79,6 +79,7 @@ jobs:
       susfs_hash_android16_6_12: ${{ steps.set-matrix.outputs.susfs_hash_android16_6_12 }}
       ksu_resolved_hash:    ${{ steps.set-matrix.outputs.ksu_resolved_hash }}
       ksu_options_normalized: ${{ steps.set-matrix.outputs.ksu_options_normalized }}
+      susfs_base_version: ${{ steps.set-matrix.outputs.susfs_base_version }}
     env:
       GH_TOKEN: ${{ github.token }}
       GH_HTTP_TIMEOUT: 600
@@ -316,6 +317,61 @@ jobs:
           echo "susfs_hash_android15_6_6=${susfs_hashes[android15-6.6]:-unknown}"   >> "$GITHUB_OUTPUT"
           echo "susfs_hash_android16_6_12=${susfs_hashes[android16-6.12]:-unknown}" >> "$GITHUB_OUTPUT"
           
+          # Fetch SUSFS_VERSION
+          susfs_base_version="unknown"
+          if [ ${#active_keys[@]} -gt 0 ]; then
+            declare -A susfs_versions_per_key
+
+            for key in "${active_keys[@]}"; do
+              user_val="${user_inputs[$key]:-}"
+              ref="${user_val:-${default_branches[$key]:-gki-android15-6.6}}"
+              key_version="unknown"
+
+              echo "🔍 Fetching SUSFS_VERSION from susfs.h for $key (ref: $ref)..."
+
+              MAX_RETRIES=3
+              RETRY_COUNT=0
+              RETRY_DELAY=5
+              until [ $RETRY_COUNT -ge $MAX_RETRIES ]; do
+                RAW_CONTENT=$(curl -s --fail \
+                  "https://gitlab.com/api/v4/projects/${PROJECT_ID}/repository/files/kernel_patches%2Finclude%2Flinux%2Fsusfs.h/raw?ref=${ref}")
+                EXIT_CODE=$?
+                if [ $EXIT_CODE -eq 0 ] && [ -n "$RAW_CONTENT" ]; then
+                  extracted=$(echo "$RAW_CONTENT" | grep '#define SUSFS_VERSION' | awk -F'"' '{print $2}')
+                  if [ -n "$extracted" ]; then
+                    key_version="$extracted"
+                    echo "  ✅ $key → SUSFS_VERSION = $key_version"
+                    break
+                  fi
+                fi
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                echo "::warning::Failed to fetch susfs.h for $key (Attempt $RETRY_COUNT/$MAX_RETRIES). Retrying in ${RETRY_DELAY}s..."
+                sleep $RETRY_DELAY
+              done
+
+              susfs_versions_per_key[$key]="$key_version"
+            done
+
+            # Use the version of the first key as a reference
+            susfs_base_version="${susfs_versions_per_key[${active_keys[0]}]}"
+
+            if [ "$susfs_base_version" = "unknown" ]; then
+              echo "::warning::Could not extract SUSFS_VERSION from susfs.h for '${active_keys[0]}'."
+            fi
+
+            # Warn only if actual SUSFS versions differ between GKI keys
+            for key in "${active_keys[@]:1}"; do
+              key_ver="${susfs_versions_per_key[$key]}"
+              if [ "$key_ver" != "$susfs_base_version" ]; then
+                echo "::warning::SUSFS version mismatch: '$key' has '$key_ver', '${active_keys[0]}' has '$susfs_base_version'. Check the refs used."
+              fi
+            done
+          else
+            echo "ℹ️  No active SUSFS keys — skipping SUSFS_VERSION fetch."
+          fi
+
+          echo "susfs_base_version=$susfs_base_version" >> "$GITHUB_OUTPUT"
+          
           # Inject susfs_resolved_hash into each device in the matrix
           susfs_hashes_json=$(jq -n \
             --arg a12 "${susfs_hashes[android12-5.10]:-unknown}" \
@@ -383,6 +439,8 @@ jobs:
           **SUSFS Configuration:**
           EOF
           } >> "$GITHUB_STEP_SUMMARY"
+          
+          echo "- **Version:** 📦 \`${{ steps.set-matrix.outputs.susfs_base_version }}\`" >> $GITHUB_STEP_SUMMARY
           
           # Display SUSFS config for each kernel version
           declare -A susfs_inputs=(
@@ -670,8 +728,8 @@ jobs:
       REPO_OWNER: ${{ github.repository_owner }}
       REPO_NAME: ${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_NAME: '*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v2.1.0 *TEST BUILD*'
-      SUSFS_BASE_VERSION: 'v2.1.0'
+      SUSFS_BASE_VERSION: ${{ needs.set-op-model.outputs.susfs_base_version }}
+      RELEASE_NAME: '*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS ${{ needs.set-op-model.outputs.susfs_base_version }} *TEST BUILD*'
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v6
@@ -680,14 +738,20 @@ jobs:
 
       - name: 🏷️ Generate and Create New Tag
         run: |
-          BASE_TAG="$SUSFS_BASE_VERSION-r0"
-          LATEST_TAG=$(gh api repos/$REPO_OWNER/$REPO_NAME/tags --jq '.[0].name')
-          if [ -z "$LATEST_TAG" ]; then
-            LATEST_TAG="$BASE_TAG"
+          # Only search for tags starting with this SUSFS version
+          LATEST_MATCHING_TAG=$(gh api repos/$REPO_OWNER/$REPO_NAME/tags \
+            --jq "[.[] | select(.name | startswith(\"${SUSFS_BASE_VERSION}-r\"))] \
+                  | sort_by(.name | split(\"-r\")[1] | tonumber) \
+                  | last | .name // empty")
+
+          if [ -z "$LATEST_MATCHING_TAG" ]; then
+            # No existing release for this version SUSFS → first release
+            NEW_TAG="${SUSFS_BASE_VERSION}-r1"
           else
-            LATEST_TAG=$(printf "%s\n%s\n" "$LATEST_TAG" "$BASE_TAG" | sort -rV | head -n1)
+            # Only increment the -r* suffix of the latest release for this version
+            NEW_TAG=$(echo "$LATEST_MATCHING_TAG" | awk -F'-r' '{printf "%s-r%d", $1, $2+1}')
           fi
-          NEW_TAG=$(echo "$LATEST_TAG" | awk -F'-r' '{suffix=$2; if (!suffix) suffix=0; suffix++; printf "%s-r%d", $1, suffix}')
+
           echo "New tag: $NEW_TAG"
           echo "NEW_TAG=${NEW_TAG}" >> $GITHUB_ENV
           git tag $NEW_TAG
@@ -968,7 +1032,7 @@ jobs:
           ## 📜 Changelog
           
           ### This Release
-          - Updated SUSFS to v2.1.0.
+          - Updated SUSFS to $SUSFS_BASE_VERSION.
           - Added HMBIRD support for all SM8750/MT6991 devices.
           - Improved ccache build system.
           - Enhanced SUSFS hiding capabilities.
