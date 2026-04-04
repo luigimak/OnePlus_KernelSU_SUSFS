@@ -754,10 +754,8 @@ jobs:
 
           echo "New tag: $NEW_TAG"
           echo "NEW_TAG=${NEW_TAG}" >> $GITHUB_ENV
-          gh api repos/$REPO_OWNER/$REPO_NAME/git/refs \
-            --method POST \
-            --field ref="refs/tags/$NEW_TAG" \
-            --field sha="$(git rev-parse HEAD)"
+          git tag $NEW_TAG
+          git push origin $NEW_TAG
 
       - name: 📥 Download Artifacts
         uses: actions/download-artifact@v8
