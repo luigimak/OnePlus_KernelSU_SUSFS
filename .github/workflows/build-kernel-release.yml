@@ -79,6 +79,7 @@ jobs:
       susfs_hash_android16_6_12: ${{ steps.set-matrix.outputs.susfs_hash_android16_6_12 }}
       ksu_resolved_hash:    ${{ steps.set-matrix.outputs.ksu_resolved_hash }}
       ksu_options_normalized: ${{ steps.set-matrix.outputs.ksu_options_normalized }}
+      susfs_base_version: ${{ steps.set-matrix.outputs.susfs_base_version }}
     env:
       GH_TOKEN: ${{ github.token }}
       GH_HTTP_TIMEOUT: 600
@@ -316,6 +317,54 @@ jobs:
           echo "susfs_hash_android15_6_6=${susfs_hashes[android15-6.6]:-unknown}"   >> "$GITHUB_OUTPUT"
           echo "susfs_hash_android16_6_12=${susfs_hashes[android16-6.12]:-unknown}" >> "$GITHUB_OUTPUT"
           
+          # Fetch SUSFS_VERSION
+          susfs_base_version="unknown"
+          if [ ${#active_keys[@]} -gt 0 ]; then
+            first_key="${active_keys[0]}"
+            first_user_val="${user_inputs[$first_key]:-}"
+            first_ref="${first_user_val:-${default_branches[$first_key]:-gki-android15-6.6}}"
+
+            echo "🔍 Fetching SUSFS_VERSION from susfs.h (ref: $first_ref)..."
+
+            MAX_RETRIES=3
+            RETRY_COUNT=0
+            RETRY_DELAY=5
+            until [ $RETRY_COUNT -ge $MAX_RETRIES ]; do
+              RAW_CONTENT=$(curl -s --fail \
+                "https://gitlab.com/api/v4/projects/${PROJECT_ID}/repository/files/kernel_patches%2Finclude%2Flinux%2Fsusfs.h/raw?ref=${first_ref}")
+              EXIT_CODE=$?
+              if [ $EXIT_CODE -eq 0 ] && [ -n "$RAW_CONTENT" ]; then
+                extracted=$(echo "$RAW_CONTENT" | grep '#define SUSFS_VERSION' | awk -F'"' '{print $2}')
+                if [ -n "$extracted" ]; then
+                  susfs_base_version="$extracted"
+                  echo "  ✅ SUSFS_VERSION = $susfs_base_version"
+                  break
+                fi
+              fi
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              echo "::warning::Failed to fetch susfs.h (Attempt $RETRY_COUNT/$MAX_RETRIES). Retrying in ${RETRY_DELAY}s..."
+              sleep $RETRY_DELAY
+            done
+
+            if [ "$susfs_base_version" = "unknown" ]; then
+              echo "::warning::Could not extract SUSFS_VERSION from susfs.h. SUSFS_BASE_VERSION will be 'unknown'."
+            fi
+
+            # Warn if other GKI keys use different manual refs than the first one (possible version inconsistency)
+            if [ ${#active_keys[@]} -gt 1 ]; then
+              for key in "${active_keys[@]:1}"; do
+                other_val="${user_inputs[$key]:-}"
+                if [ -n "$other_val" ] && [ "$other_val" != "$first_ref" ]; then
+                  echo "::warning::GKI key '$key' uses ref '$other_val', different from '$first_ref' used to extract SUSFS_VERSION. Verify that the versions in susfs.h match."
+                fi
+              done
+            fi
+          else
+            echo "ℹ️  No active SUSFS keys — skipping SUSFS_VERSION fetch."
+          fi
+
+          echo "susfs_base_version=$susfs_base_version" >> "$GITHUB_OUTPUT"
+          
           # Inject susfs_resolved_hash into each device in the matrix
           susfs_hashes_json=$(jq -n \
             --arg a12 "${susfs_hashes[android12-5.10]:-unknown}" \
@@ -383,6 +432,8 @@ jobs:
           **SUSFS Configuration:**
           EOF
           } >> "$GITHUB_STEP_SUMMARY"
+          
+          echo "- **Version:** 📦 \`${{ steps.set-matrix.outputs.susfs_base_version }}\`" >> $GITHUB_STEP_SUMMARY
           
           # Display SUSFS config for each kernel version
           declare -A susfs_inputs=(
@@ -670,8 +721,8 @@ jobs:
       REPO_OWNER: ${{ github.repository_owner }}
       REPO_NAME: ${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_NAME: '*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v2.1.0 *TEST BUILD*'
-      SUSFS_BASE_VERSION: 'v2.1.0'
+      SUSFS_BASE_VERSION: ${{ needs.set-op-model.outputs.susfs_base_version }}
+      RELEASE_NAME: '*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS ${{ needs.set-op-model.outputs.susfs_base_version }} *TEST BUILD*'
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v6
@@ -680,18 +731,26 @@ jobs:
 
       - name: 🏷️ Generate and Create New Tag
         run: |
-          BASE_TAG="$SUSFS_BASE_VERSION-r0"
-          LATEST_TAG=$(gh api repos/$REPO_OWNER/$REPO_NAME/tags --jq '.[0].name')
-          if [ -z "$LATEST_TAG" ]; then
-            LATEST_TAG="$BASE_TAG"
+          # Only search for tags starting with this SUSFS version
+          LATEST_MATCHING_TAG=$(gh api repos/$REPO_OWNER/$REPO_NAME/tags \
+            --jq "[.[] | select(.name | startswith(\"${SUSFS_BASE_VERSION}-r\"))] \
+                  | sort_by(.name | split(\"-r\")[1] | tonumber) \
+                  | last | .name // empty")
+
+          if [ -z "$LATEST_MATCHING_TAG" ]; then
+            # No existing release for this version SUSFS → first release
+            NEW_TAG="${SUSFS_BASE_VERSION}-r1"
           else
-            LATEST_TAG=$(printf "%s\n%s\n" "$LATEST_TAG" "$BASE_TAG" | sort -rV | head -n1)
+            # Only increment the -r* suffix of the latest release for this version
+            NEW_TAG=$(echo "$LATEST_MATCHING_TAG" | awk -F'-r' '{printf "%s-r%d", $1, $2+1}')
           fi
-          NEW_TAG=$(echo "$LATEST_TAG" | awk -F'-r' '{suffix=$2; if (!suffix) suffix=0; suffix++; printf "%s-r%d", $1, suffix}')
+
           echo "New tag: $NEW_TAG"
           echo "NEW_TAG=${NEW_TAG}" >> $GITHUB_ENV
-          git tag $NEW_TAG
-          git push origin $NEW_TAG
+          gh api repos/$REPO_OWNER/$REPO_NAME/git/refs \
+            --method POST \
+            --field ref="refs/tags/$NEW_TAG" \
+            --field sha="$(git rev-parse HEAD)"
 
       - name: 📥 Download Artifacts
         uses: actions/download-artifact@v8
@@ -968,7 +1027,7 @@ jobs:
           ## 📜 Changelog
           
           ### This Release
-          - Updated SUSFS to v2.1.0.
+          - Updated SUSFS to $SUSFS_BASE_VERSION.
           - Added HMBIRD support for all SM8750/MT6991 devices.
           - Improved ccache build system.
           - Enhanced SUSFS hiding capabilities.
