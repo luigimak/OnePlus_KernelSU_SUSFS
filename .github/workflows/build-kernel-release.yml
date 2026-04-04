@@ -320,45 +320,52 @@ jobs:
           # Fetch SUSFS_VERSION
           susfs_base_version="unknown"
           if [ ${#active_keys[@]} -gt 0 ]; then
-            first_key="${active_keys[0]}"
-            first_user_val="${user_inputs[$first_key]:-}"
-            first_ref="${first_user_val:-${default_branches[$first_key]:-gki-android15-6.6}}"
+            declare -A susfs_versions_per_key
 
-            echo "🔍 Fetching SUSFS_VERSION from susfs.h (ref: $first_ref)..."
+            for key in "${active_keys[@]}"; do
+              user_val="${user_inputs[$key]:-}"
+              ref="${user_val:-${default_branches[$key]:-gki-android15-6.6}}"
+              key_version="unknown"
 
-            MAX_RETRIES=3
-            RETRY_COUNT=0
-            RETRY_DELAY=5
-            until [ $RETRY_COUNT -ge $MAX_RETRIES ]; do
-              RAW_CONTENT=$(curl -s --fail \
-                "https://gitlab.com/api/v4/projects/${PROJECT_ID}/repository/files/kernel_patches%2Finclude%2Flinux%2Fsusfs.h/raw?ref=${first_ref}")
-              EXIT_CODE=$?
-              if [ $EXIT_CODE -eq 0 ] && [ -n "$RAW_CONTENT" ]; then
-                extracted=$(echo "$RAW_CONTENT" | grep '#define SUSFS_VERSION' | awk -F'"' '{print $2}')
-                if [ -n "$extracted" ]; then
-                  susfs_base_version="$extracted"
-                  echo "  ✅ SUSFS_VERSION = $susfs_base_version"
-                  break
+              echo "🔍 Fetching SUSFS_VERSION from susfs.h for $key (ref: $ref)..."
+
+              MAX_RETRIES=3
+              RETRY_COUNT=0
+              RETRY_DELAY=5
+              until [ $RETRY_COUNT -ge $MAX_RETRIES ]; do
+                RAW_CONTENT=$(curl -s --fail \
+                  "https://gitlab.com/api/v4/projects/${PROJECT_ID}/repository/files/kernel_patches%2Finclude%2Flinux%2Fsusfs.h/raw?ref=${ref}")
+                EXIT_CODE=$?
+                if [ $EXIT_CODE -eq 0 ] && [ -n "$RAW_CONTENT" ]; then
+                  extracted=$(echo "$RAW_CONTENT" | grep '#define SUSFS_VERSION' | awk -F'"' '{print $2}')
+                  if [ -n "$extracted" ]; then
+                    key_version="$extracted"
+                    echo "  ✅ $key → SUSFS_VERSION = $key_version"
+                    break
+                  fi
                 fi
-              fi
-              RETRY_COUNT=$((RETRY_COUNT + 1))
-              echo "::warning::Failed to fetch susfs.h (Attempt $RETRY_COUNT/$MAX_RETRIES). Retrying in ${RETRY_DELAY}s..."
-              sleep $RETRY_DELAY
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                echo "::warning::Failed to fetch susfs.h for $key (Attempt $RETRY_COUNT/$MAX_RETRIES). Retrying in ${RETRY_DELAY}s..."
+                sleep $RETRY_DELAY
+              done
+
+              susfs_versions_per_key[$key]="$key_version"
             done
 
+            # Use the version of the first key as a reference
+            susfs_base_version="${susfs_versions_per_key[${active_keys[0]}]}"
+
             if [ "$susfs_base_version" = "unknown" ]; then
-              echo "::warning::Could not extract SUSFS_VERSION from susfs.h. SUSFS_BASE_VERSION will be 'unknown'."
+              echo "::warning::Could not extract SUSFS_VERSION from susfs.h for '${active_keys[0]}'."
             fi
 
-            # Warn if other GKI keys use different manual refs than the first one (possible version inconsistency)
-            if [ ${#active_keys[@]} -gt 1 ]; then
-              for key in "${active_keys[@]:1}"; do
-                other_val="${user_inputs[$key]:-}"
-                if [ -n "$other_val" ] && [ "$other_val" != "$first_ref" ]; then
-                  echo "::warning::GKI key '$key' uses ref '$other_val', different from '$first_ref' used to extract SUSFS_VERSION. Verify that the versions in susfs.h match."
-                fi
-              done
-            fi
+            # Warn only if actual SUSFS versions differ between GKI keys
+            for key in "${active_keys[@]:1}"; do
+              key_ver="${susfs_versions_per_key[$key]}"
+              if [ "$key_ver" != "$susfs_base_version" ]; then
+                echo "::warning::SUSFS version mismatch: '$key' has '$key_ver', '${active_keys[0]}' has '$susfs_base_version'. Check the refs used."
+              fi
+            done
           else
             echo "ℹ️  No active SUSFS keys — skipping SUSFS_VERSION fetch."
           fi
