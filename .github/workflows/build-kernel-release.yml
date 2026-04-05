@@ -79,6 +79,7 @@ jobs:
       susfs_hash_android16_6_12: ${{ steps.set-matrix.outputs.susfs_hash_android16_6_12 }}
       ksu_resolved_hash:    ${{ steps.set-matrix.outputs.ksu_resolved_hash }}
       ksu_options_normalized: ${{ steps.set-matrix.outputs.ksu_options_normalized }}
+      susfs_base_version: ${{ steps.set-matrix.outputs.susfs_base_version }}
     env:
       GH_TOKEN: ${{ github.token }}
       GH_HTTP_TIMEOUT: 600
@@ -270,6 +271,8 @@ jobs:
           echo "🔍 Resolving SUSFS hashes for: ${active_keys[*]:-none}"
           
           declare -A susfs_hashes
+          declare -A susfs_versions_per_key
+          
           for key in "${active_keys[@]}"; do
             default_val="${default_branches[$key]}"
             user_val="${user_inputs[$key]:-$default_val}"
@@ -280,25 +283,53 @@ jobs:
             resolved=""
             
             until [ $RETRY_COUNT -ge $MAX_RETRIES ]; do
-              # We query the commit endpoint which accepts Branch, Tag, or SHA
               RESULT=$(curl -s --fail "https://gitlab.com/api/v4/projects/${PROJECT_ID}/repository/commits/${user_val}")
               EXIT_CODE=$?
-              
               if [ $EXIT_CODE -eq 0 ] && [ -n "$RESULT" ]; then
                 resolved=$(echo "$RESULT" | jq -r '.id')
                 echo "  ✅ Query for $key input field Success"
+                
+                # Single loop: fetch SUSFS_VERSION from susfs.h only if releasing
+                if [ "${{ inputs.make_release }}" = "true" ]; then
+                  VER_RETRY=0
+                  VER_MAX_RETRIES=3
+                  VER_RETRY_DELAY=5
+                  key_version="unknown"
+                  until [ $VER_RETRY -ge $VER_MAX_RETRIES ]; do
+                    RAW_CONTENT=$(curl -s --fail \
+                      "https://gitlab.com/api/v4/projects/${PROJECT_ID}/repository/files/kernel_patches%2Finclude%2Flinux%2Fsusfs.h/raw?ref=${user_val}")
+                    if [ $? -eq 0 ] && [ -n "$RAW_CONTENT" ]; then
+                      extracted=$(echo "$RAW_CONTENT" | grep '#define SUSFS_VERSION' | awk -F'"' '{print $2}')
+                      if [ -n "$extracted" ]; then
+                        key_version="$extracted"
+                        echo "  ✅ $key → SUSFS_VERSION = $key_version"
+                        break
+                      fi
+                    fi
+                    VER_RETRY=$((VER_RETRY + 1))
+                    echo "::warning::Failed to fetch susfs.h for $key (Attempt $VER_RETRY/$VER_MAX_RETRIES). Retrying in ${VER_RETRY_DELAY}s..."
+                    sleep $VER_RETRY_DELAY
+                  done
+                  susfs_versions_per_key[$key]="$key_version"
+                fi
+                
                 break
               fi
-              
               RETRY_COUNT=$((RETRY_COUNT + 1))
               echo "::warning::GitLab API failed (Attempt $RETRY_COUNT/$MAX_RETRIES). Retrying..."
               sleep $RETRY_DELAY
             done
             
-            # Final Validation
+            # Final Validation — SUSFS hash
             if [ -z "$resolved" ] || [ "$resolved" = "null" ]; then
-               echo "::error::Could not resolve SUSFS ref '$user_val' for $key on GitLab."
-               exit 1
+              echo "::error::Could not resolve SUSFS ref '$user_val' for $key on GitLab."
+              exit 1
+            fi
+
+            # Final Validation — SUSFS version
+            if [ "${{ inputs.make_release }}" = "true" ] && [ "${susfs_versions_per_key[$key]:-unknown}" = "unknown" ]; then
+              echo "::error::Could not extract SUSFS_VERSION from susfs.h for '$key' after $VER_MAX_RETRIES attempts. Cannot proceed with release."
+              exit 1
             fi
             
             susfs_hashes["$key"]="$resolved"
@@ -315,6 +346,34 @@ jobs:
           echo "susfs_hash_android14_6_1=${susfs_hashes[android14-6.1]:-unknown}"   >> "$GITHUB_OUTPUT"
           echo "susfs_hash_android15_6_6=${susfs_hashes[android15-6.6]:-unknown}"   >> "$GITHUB_OUTPUT"
           echo "susfs_hash_android16_6_12=${susfs_hashes[android16-6.12]:-unknown}" >> "$GITHUB_OUTPUT"
+          
+          # SUSFS_VERSION — only when releasing
+          if [ "${{ inputs.make_release }}" = "true" ]; then
+            susfs_base_version="unknown"
+            for key in "${active_keys[@]}"; do
+              ver="${susfs_versions_per_key[$key]:-unknown}"
+              if [ "$ver" != "unknown" ]; then
+                susfs_base_version="$ver"
+                break
+              fi
+            done
+            
+            if [ "$susfs_base_version" = "unknown" ]; then
+              echo "::error::Could not extract SUSFS_VERSION from susfs.h for any active GKI key. Cannot proceed with release."
+              exit 1
+            fi
+            
+            # make_release=true: mismatch is a hard error — prevents wrong tag
+            for key in "${active_keys[@]}"; do
+              key_ver="${susfs_versions_per_key[$key]:-unknown}"
+              if [ "$key_ver" != "$susfs_base_version" ]; then
+                echo "::error::SUSFS version mismatch: '$key' has '$key_ver', expected '$susfs_base_version'. Align refs before releasing."
+                exit 1
+              fi
+            done
+            
+            echo "susfs_base_version=$susfs_base_version" >> "$GITHUB_OUTPUT"
+          fi
           
           # Inject susfs_resolved_hash into each device in the matrix
           susfs_hashes_json=$(jq -n \
@@ -670,8 +729,8 @@ jobs:
       REPO_OWNER: ${{ github.repository_owner }}
       REPO_NAME: ${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_NAME: '*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v2.1.0 *TEST BUILD*'
-      SUSFS_BASE_VERSION: 'v2.1.0'
+      SUSFS_BASE_VERSION: ${{ needs.set-op-model.outputs.susfs_base_version }}
+      RELEASE_NAME: '*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS ${{ needs.set-op-model.outputs.susfs_base_version }} *TEST BUILD*'
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v6
@@ -680,14 +739,20 @@ jobs:
 
       - name: 🏷️ Generate and Create New Tag
         run: |
-          BASE_TAG="$SUSFS_BASE_VERSION-r0"
-          LATEST_TAG=$(gh api repos/$REPO_OWNER/$REPO_NAME/tags --jq '.[0].name')
-          if [ -z "$LATEST_TAG" ]; then
-            LATEST_TAG="$BASE_TAG"
+          # Only search for tags starting with this SUSFS version
+          LATEST_MATCHING_TAG=$(gh api repos/$REPO_OWNER/$REPO_NAME/tags \
+            --jq "[.[] | select(.name | startswith(\"${SUSFS_BASE_VERSION}-r\"))] \
+                  | sort_by(.name | split(\"-r\")[1] | tonumber) \
+                  | last | .name // empty")
+
+          if [ -z "$LATEST_MATCHING_TAG" ]; then
+            # No existing release for this version SUSFS → first release
+            NEW_TAG="${SUSFS_BASE_VERSION}-r1"
           else
-            LATEST_TAG=$(printf "%s\n%s\n" "$LATEST_TAG" "$BASE_TAG" | sort -rV | head -n1)
+            # Only increment the -r* suffix of the latest release for this version
+            NEW_TAG=$(echo "$LATEST_MATCHING_TAG" | awk -F'-r' '{printf "%s-r%d", $1, $2+1}')
           fi
-          NEW_TAG=$(echo "$LATEST_TAG" | awk -F'-r' '{suffix=$2; if (!suffix) suffix=0; suffix++; printf "%s-r%d", $1, suffix}')
+
           echo "New tag: $NEW_TAG"
           echo "NEW_TAG=${NEW_TAG}" >> $GITHUB_ENV
           git tag $NEW_TAG
@@ -968,7 +1033,7 @@ jobs:
           ## 📜 Changelog
           
           ### This Release
-          - Updated SUSFS to v2.1.0.
+          - Updated SUSFS to $SUSFS_BASE_VERSION.
           - Added HMBIRD support for all SM8750/MT6991 devices.
           - Improved ccache build system.
           - Enhanced SUSFS hiding capabilities.
