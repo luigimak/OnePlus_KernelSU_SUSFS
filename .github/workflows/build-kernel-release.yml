@@ -320,9 +320,15 @@ jobs:
               sleep $RETRY_DELAY
             done
             
-            # Final Validation
+            # Final Validation — SUSFS hash
             if [ -z "$resolved" ] || [ "$resolved" = "null" ]; then
               echo "::error::Could not resolve SUSFS ref '$user_val' for $key on GitLab."
+              exit 1
+            fi
+
+            # Final Validation — SUSFS version
+            if [ "${{ inputs.make_release }}" = "true" ] && [ "${susfs_versions_per_key[$key]:-unknown}" = "unknown" ]; then
+              echo "::error::Could not extract SUSFS_VERSION from susfs.h for '$key' after $VER_MAX_RETRIES attempts. Cannot proceed with release."
               exit 1
             fi
             
