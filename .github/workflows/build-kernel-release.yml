@@ -291,15 +291,26 @@ jobs:
                 
                 # Single loop: fetch SUSFS_VERSION from susfs.h only if releasing
                 if [ "${{ inputs.make_release }}" = "true" ]; then
-                  RAW_CONTENT=$(curl -s --fail \
-                    "https://gitlab.com/api/v4/projects/${PROJECT_ID}/repository/files/kernel_patches%2Finclude%2Flinux%2Fsusfs.h/raw?ref=${user_val}")
-                  if [ $? -eq 0 ] && [ -n "$RAW_CONTENT" ]; then
-                    extracted=$(echo "$RAW_CONTENT" | grep '#define SUSFS_VERSION' | awk -F'"' '{print $2}')
-                    susfs_versions_per_key[$key]="${extracted:-unknown}"
-                    echo "  ✅ $key → SUSFS_VERSION = ${extracted:-unknown}"
-                  else
-                    susfs_versions_per_key[$key]="unknown"
-                  fi
+                  VER_RETRY=0
+                  VER_MAX_RETRIES=3
+                  VER_RETRY_DELAY=5
+                  key_version="unknown"
+                  until [ $VER_RETRY -ge $VER_MAX_RETRIES ]; do
+                    RAW_CONTENT=$(curl -s --fail \
+                      "https://gitlab.com/api/v4/projects/${PROJECT_ID}/repository/files/kernel_patches%2Finclude%2Flinux%2Fsusfs.h/raw?ref=${user_val}")
+                    if [ $? -eq 0 ] && [ -n "$RAW_CONTENT" ]; then
+                      extracted=$(echo "$RAW_CONTENT" | grep '#define SUSFS_VERSION' | awk -F'"' '{print $2}')
+                      if [ -n "$extracted" ]; then
+                        key_version="$extracted"
+                        echo "  ✅ $key → SUSFS_VERSION = $key_version"
+                        break
+                      fi
+                    fi
+                    VER_RETRY=$((VER_RETRY + 1))
+                    echo "::warning::Failed to fetch susfs.h for $key (Attempt $VER_RETRY/$VER_MAX_RETRIES). Retrying in ${VER_RETRY_DELAY}s..."
+                    sleep $VER_RETRY_DELAY
+                  done
+                  susfs_versions_per_key[$key]="$key_version"
                 fi
                 
                 break
