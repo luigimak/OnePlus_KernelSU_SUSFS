@@ -243,8 +243,8 @@ jobs:
           merged_matrix=$(echo "$merged_matrix" | jq  --arg resolved_sha "$resolved_sha" 'map(.ksu_resolved_hash = $resolved_sha)')
           
           # SUSFS hash fetch
-          SUSFS_REPO="https://gitlab.com/simonpunk/susfs4ksu.git"
-          PROJECT_ID="simonpunk%2fsusfs4ksu"
+          SUSFS_REPO="https://gitlab.com/luigimak/susfs4ksu.git"
+          PROJECT_ID="luigimak%2fsusfs4ksu"
           
           declare -A default_branches=(
             ["android12-5.10"]="gki-android12-5.10"

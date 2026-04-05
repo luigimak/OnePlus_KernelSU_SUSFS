@@ -755,7 +755,7 @@ runs:
         retry_clone "https://github.com/TheWildJames/kernel_patches.git"
         
         if [ "${{ env.OP_SUSFS }}" = true ]; then
-          retry_clone "https://gitlab.com/simonpunk/susfs4ksu.git" "master" 0
+          retry_clone "https://gitlab.com/luigimak/susfs4ksu.git" "master" 0
           
           cd susfs4ksu
           
@@ -1853,7 +1853,7 @@ runs:
             echo "| **SUSFS Branch** | \`${{ env.SUSFS_BRANCH_NAME }}\` |"
             
             if [ "$SUSFS_SHA" != "unknown" ]; then
-              echo "| **SUSFS Commit** | [\`${SUSFS_SHA:0:8}\`](https://gitlab.com/simonpunk/susfs4ksu/-/commit/$SUSFS_SHA) |"
+              echo "| **SUSFS Commit** | [\`${SUSFS_SHA:0:8}\`](https://gitlab.com/luigimak/susfs4ksu/-/commit/$SUSFS_SHA) |"
             else
               echo "| **SUSFS Commit** | unknown |"
             fi
