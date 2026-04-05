@@ -271,6 +271,8 @@ jobs:
           echo "🔍 Resolving SUSFS hashes for: ${active_keys[*]:-none}"
           
           declare -A susfs_hashes
+          declare -A susfs_versions_per_key
+          
           for key in "${active_keys[@]}"; do
             default_val="${default_branches[$key]}"
             user_val="${user_inputs[$key]:-$default_val}"
@@ -281,16 +283,27 @@ jobs:
             resolved=""
             
             until [ $RETRY_COUNT -ge $MAX_RETRIES ]; do
-              # We query the commit endpoint which accepts Branch, Tag, or SHA
               RESULT=$(curl -s --fail "https://gitlab.com/api/v4/projects/${PROJECT_ID}/repository/commits/${user_val}")
               EXIT_CODE=$?
-              
               if [ $EXIT_CODE -eq 0 ] && [ -n "$RESULT" ]; then
                 resolved=$(echo "$RESULT" | jq -r '.id')
                 echo "  ✅ Query for $key input field Success"
+                
+                # Single loop: fetch SUSFS_VERSION from susfs.h only if releasing
+                if [ "${{ inputs.make_release }}" = "true" ]; then
+                  RAW_CONTENT=$(curl -s --fail \
+                    "https://gitlab.com/api/v4/projects/${PROJECT_ID}/repository/files/kernel_patches%2Finclude%2Flinux%2Fsusfs.h/raw?ref=${user_val}")
+                  if [ $? -eq 0 ] && [ -n "$RAW_CONTENT" ]; then
+                    extracted=$(echo "$RAW_CONTENT" | grep '#define SUSFS_VERSION' | awk -F'"' '{print $2}')
+                    susfs_versions_per_key[$key]="${extracted:-unknown}"
+                    echo "  ✅ $key → SUSFS_VERSION = ${extracted:-unknown}"
+                  else
+                    susfs_versions_per_key[$key]="unknown"
+                  fi
+                fi
+                
                 break
               fi
-              
               RETRY_COUNT=$((RETRY_COUNT + 1))
               echo "::warning::GitLab API failed (Attempt $RETRY_COUNT/$MAX_RETRIES). Retrying..."
               sleep $RETRY_DELAY
@@ -298,8 +311,8 @@ jobs:
             
             # Final Validation
             if [ -z "$resolved" ] || [ "$resolved" = "null" ]; then
-               echo "::error::Could not resolve SUSFS ref '$user_val' for $key on GitLab."
-               exit 1
+              echo "::error::Could not resolve SUSFS ref '$user_val' for $key on GitLab."
+              exit 1
             fi
             
             susfs_hashes["$key"]="$resolved"
@@ -317,59 +330,33 @@ jobs:
           echo "susfs_hash_android15_6_6=${susfs_hashes[android15-6.6]:-unknown}"   >> "$GITHUB_OUTPUT"
           echo "susfs_hash_android16_6_12=${susfs_hashes[android16-6.12]:-unknown}" >> "$GITHUB_OUTPUT"
           
-          # Fetch SUSFS_VERSION
-          susfs_base_version="unknown"
-          if [ ${#active_keys[@]} -gt 0 ]; then
-            declare -A susfs_versions_per_key
-
+          # SUSFS_VERSION — only when releasing
+          if [ "${{ inputs.make_release }}" = "true" ]; then
+            susfs_base_version="unknown"
             for key in "${active_keys[@]}"; do
-              user_val="${user_inputs[$key]:-}"
-              ref="${user_val:-${default_branches[$key]:-gki-android15-6.6}}"
-              key_version="unknown"
-
-              echo "🔍 Fetching SUSFS_VERSION from susfs.h for $key (ref: $ref)..."
-
-              MAX_RETRIES=3
-              RETRY_COUNT=0
-              RETRY_DELAY=5
-              until [ $RETRY_COUNT -ge $MAX_RETRIES ]; do
-                RAW_CONTENT=$(curl -s --fail \
-                  "https://gitlab.com/api/v4/projects/${PROJECT_ID}/repository/files/kernel_patches%2Finclude%2Flinux%2Fsusfs.h/raw?ref=${ref}")
-                EXIT_CODE=$?
-                if [ $EXIT_CODE -eq 0 ] && [ -n "$RAW_CONTENT" ]; then
-                  extracted=$(echo "$RAW_CONTENT" | grep '#define SUSFS_VERSION' | awk -F'"' '{print $2}')
-                  if [ -n "$extracted" ]; then
-                    key_version="$extracted"
-                    echo "  ✅ $key → SUSFS_VERSION = $key_version"
-                    break
-                  fi
-                fi
-                RETRY_COUNT=$((RETRY_COUNT + 1))
-                echo "::warning::Failed to fetch susfs.h for $key (Attempt $RETRY_COUNT/$MAX_RETRIES). Retrying in ${RETRY_DELAY}s..."
-                sleep $RETRY_DELAY
-              done
-
-              susfs_versions_per_key[$key]="$key_version"
+              ver="${susfs_versions_per_key[$key]:-unknown}"
+              if [ "$ver" != "unknown" ]; then
+                susfs_base_version="$ver"
+                break
+              fi
             done
-
-            # Use the version of the first key as a reference
-            susfs_base_version="${susfs_versions_per_key[${active_keys[0]}]}"
-
+            
             if [ "$susfs_base_version" = "unknown" ]; then
-              echo "::warning::Could not extract SUSFS_VERSION from susfs.h for '${active_keys[0]}'."
+              echo "::error::Could not extract SUSFS_VERSION from susfs.h for any active GKI key. Cannot proceed with release."
+              exit 1
             fi
-
-            # Warn only if actual SUSFS versions differ between GKI keys
-            for key in "${active_keys[@]:1}"; do
-              key_ver="${susfs_versions_per_key[$key]}"
+            
+            # Warn on actual version mismatch between GKI keys
+            for key in "${active_keys[@]}"; do
+              key_ver="${susfs_versions_per_key[$key]:-unknown}"
               if [ "$key_ver" != "$susfs_base_version" ]; then
-                echo "::warning::SUSFS version mismatch: '$key' has '$key_ver', '${active_keys[0]}' has '$susfs_base_version'. Check the refs used."
+                echo "::warning::SUSFS version mismatch: '$key' has '$key_ver', expected '$susfs_base_version'. Check the refs used."
               fi
             done
           else
-            echo "ℹ️  No active SUSFS keys — skipping SUSFS_VERSION fetch."
+            susfs_base_version="unknown"
           fi
-
+          
           echo "susfs_base_version=$susfs_base_version" >> "$GITHUB_OUTPUT"
           
           # Inject susfs_resolved_hash into each device in the matrix
