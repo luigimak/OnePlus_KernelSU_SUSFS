@@ -346,11 +346,12 @@ jobs:
               exit 1
             fi
             
-            # Warn on actual version mismatch between GKI keys
+            # make_release=true: mismatch is a hard error — prevents wrong tag
             for key in "${active_keys[@]}"; do
               key_ver="${susfs_versions_per_key[$key]:-unknown}"
               if [ "$key_ver" != "$susfs_base_version" ]; then
-                echo "::warning::SUSFS version mismatch: '$key' has '$key_ver', expected '$susfs_base_version'. Check the refs used."
+                echo "::error::SUSFS version mismatch: '$key' has '$key_ver', expected '$susfs_base_version'. Align refs before releasing."
+                exit 1
               fi
             done
             
