@@ -1395,15 +1395,15 @@ runs:
         echo "::group::Add Droidspaces Support"
         cd "$COMMON_KERNEL_FOLDER"
         
-        echo "Applying patch to enable SYSVIPC without breaking ABI"
-        case "$OP_BRANCH" in
-          wild/sm8550|wild/sm7550)
-            patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/common/droidspaces/fix_sysvipc_kabi_1_2_3.patch"
-            ;;
-          *)
-            patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/common/droidspaces/fix_sysvipc_kabi_6_7_8.patch"
-            ;;
-        esac
+        #echo "Applying patch to enable SYSVIPC without breaking ABI"
+        #case "$OP_BRANCH" in
+        #  wild/sm8550|wild/sm7550)
+        #    patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/common/droidspaces/fix_sysvipc_kabi_1_2_3.patch"
+        #    ;;
+        #  *)
+        #    patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/common/droidspaces/fix_sysvipc_kabi_6_7_8.patch"
+        #    ;;
+        #esac
         
         cat >> "$COMMON_KERNEL_FOLDER/arch/arm64/configs/gki_defconfig" <<EOF
         CONFIG_SYSVIPC=y
