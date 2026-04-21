@@ -44,6 +44,11 @@ on:
         description: 'Clean build (no ccache)'
         type: boolean
         default: false
+      debug:
+        description: 'Enable dumping debug related artifacts'
+        required: false
+        type: boolean
+        default: false
       build_timestamp:
         description: 'Custom kernel build timestamp for uname -a (e.g. "Tue Feb 10 10:01:02 UTC 2026"). Leave empty for current time.'
         type: string
@@ -434,7 +439,7 @@ jobs:
               ksu_display+="🔀 \`$ksu_type\`, \`$ksu_ref\` (\`${{ steps.set-matrix.outputs.ksu_resolved_hash }}\`)"
             fi
           fi
-
+          
           build_ts_input="${{ inputs.build_timestamp }}"
           if [ -z "$build_ts_input" ]; then
             build_ts_display="⏱️ auto (current build time)"
@@ -459,6 +464,7 @@ jobs:
           - Optimization: ${{ inputs.optimize_level }}
           - Clean Build/No Ccache: ${{ inputs.clean_build && '✅ Yes' || '❌ No' }}
           - Create Release: ${{ inputs.make_release && '✅ Yes' || '❌ No' }}
+          - Create Debug Artifacts: ${{ inputs.debug && '✅ Yes' || '❌ No' }}
           
           **SUSFS Configuration:**
           EOF
@@ -607,6 +613,7 @@ jobs:
           optimize_level: ${{ inputs.optimize_level }}
           build_timestamp: ${{ inputs.build_timestamp }}
           clean: ${{ inputs.clean_build }}
+          debug: ${{ inputs.debug }}
 
       - name: 📊 Build statistics
         id: build-stat
