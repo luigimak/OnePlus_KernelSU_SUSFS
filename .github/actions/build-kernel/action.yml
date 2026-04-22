@@ -121,6 +121,7 @@ runs:
         c_compiler="$OP_C_COMPILER"
         rust_compiler="$OP_RUST_COMPILER"
         zyc_compiler="$OP_ZYC_COMPILER"
+        bindgen="$OP_BINDGEN"
         ds="$OP_DS"
         ntsync="$OP_NTSYNC"
         optimize='${{ inputs.optimize_level }}'
@@ -247,6 +248,8 @@ runs:
         
         # OP_ZYC_COMPILER currently has no checks!
         
+        # OP_BINDGEN currently has no checks!
+        
         if [[ -z "$ds" ]]; then
           errors+=("Input 'ds' cannot be empty")
         elif [[ "$ds" != "true" && "$ds" != "false" ]]; then
@@ -275,26 +278,6 @@ runs:
           echo "✅ Input validation passed"
         fi
         echo "::endgroup::"
-
-    - name: Install bindgen only (no rustc)
-      shell: bash
-      if: ${{ env.OP_RUST_BUILD == 'true' }}
-      run: |
-        # Install bindgen via cargo (no full rustc needed)
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
-        source $HOME/.cargo/env
-        
-        # Install bindgen CLI only (~50-100MB total)
-        cargo install bindgen-cli --version 0.69.5
-        
-        # Verify
-        bindgen --version
-        which bindgen
-
-    - name: Show bindgen version
-      shell: bash
-      if: ${{ env.OP_RUST_BUILD == 'true' }}
-      run: bindgen --version
 
     - name: Setup Base Environment
       shell: bash
@@ -435,6 +418,7 @@ runs:
     - name: Check or Detect Clang
       shell: bash
       run: |
+        # Check or Detect Clang
         set -euo pipefail
         echo "::group::Detect Clang"
         CLANG_FOUND=false
@@ -550,13 +534,15 @@ runs:
         echo "✅ Detected Clang: $CLANG_VERSION"
         echo "::endgroup::"
 
-    - name: Check or Detect Rust
+    - name: Check or Detect Rust & bindgen
       shell: bash
       if: ${{ env.OP_RUST_BUILD == 'true' }}
       run: |
+        # Check or Detect Rust & bindgen
         set -euo pipefail
-        echo "::group::Detect Rust"
+        echo "::group::Detect Rust & bindgen"
         RUSTC_FOUND=false
+        BINDGEN_FOUND=false
         
         if [ -z "$OP_RUST_COMPILER" ]; then
           for base in "$KERNEL_PLATFORM_FOLDER/prebuilts" "$KERNEL_PLATFORM_FOLDER/prebuilts-master"; do
@@ -575,13 +561,55 @@ runs:
           fi
         fi
         
+        if [ -z "$OP_BINDGEN" ]; then
+          for base in "$KERNEL_PLATFORM_FOLDER/prebuilts" "$KERNEL_PLATFORM_FOLDER/prebuilts-master"; do
+            [ -d "$base/clang-tools/linux-x86" ] || continue
+            if [ -x "$base/clang-tools/linux-x86/bin/bindgen" ]; then
+              BINDGEN_BIN="$base/clang-tools/linux-x86/bin"
+              BINDGEN_FOUND=true
+              chmod +x "$base/clang-tools/linux-x86/bin/bindgen"
+              break
+            fi
+          done
+        else
+          if [ -x "$CONFIG_FOLDER/$OP_BINDGEN/bindgen" ]; then
+            BINDGEN_BIN="$CONFIG_FOLDER/$OP_BINDGEN"
+            BINDGEN_FOUND=true
+            chmod +x "$CONFIG_FOLDER/$OP_BINDGEN/bindgen"
+          fi
+        fi
+        
         [ "$RUSTC_FOUND" = true ] || { echo "::error::No RUST toolchain found"; exit 1; }
+        [ "$BINDGEN_FOUND" = true ] || { echo "::warning::No bindgen found"; }
         
         echo "RUSTC_BIN_PATH=$RUSTC_BIN" >> "$GITHUB_ENV"
         RUSTC_VERSION="$("$RUSTC_BIN/rustc" --version | head -n1)"
         echo "RUSTC_VERSION=$RUSTC_VERSION" >> "$GITHUB_ENV"
         echo "✅ Detected RUSTC: $RUSTC_VERSION"
+        if [ "$BINDGEN_FOUND" = true ]; then
+          echo "BINDGEN_BIN_PATH=$BINDGEN_BIN" >> "$GITHUB_ENV"
+          BINDGEN_VERSION="$("$BINDGEN_BIN/bindgen" --version | head -n1)"
+          echo "BINDGEN_VERSION=$BINDGEN_VERSION" >> "$GITHUB_ENV"
+          echo "✅ Detected BINDGEN: $BINDGEN_VERSION"
+        fi
         
+        echo "::endgroup::"
+
+    - name: Install bindgen only (no rustc)
+      shell: bash
+      if: ${{ env.OP_RUST_BUILD == 'true'  && !env.BINDGEN_BIN_PATH }}
+      run: |
+        # Install bindgen via cargo (no full rustc needed)
+        echo "::group::Install bindgen only (no rustc)"
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
+        source $HOME/.cargo/env
+        
+        # Install bindgen CLI only (~50-100MB total)
+        cargo install bindgen-cli --version 0.69.5
+        
+        # Verify
+        bindgen --version
+        which bindgen
         echo "::endgroup::"
 
     - name: Set Cache Environment

@@ -10,6 +10,7 @@
   "zyc_compiler": "",
   "c_compiler": "kernel_platform/prebuilts/clang/host/linux-x86/clang-r487747c/bin",
   "rust_compiler": "",
+  "bindgen": "",
   "rust_build": false,
   "disk_cleanup": true,
   "hmbird": false,
