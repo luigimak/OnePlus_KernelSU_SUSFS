@@ -612,30 +612,9 @@ runs:
         which bindgen
         echo "::endgroup::"
 
-    - name: Set Cache Environment
-      shell: bash
-      run: |
-        set -euo pipefail
-        echo "::group::Configure ccache environment"
-        
-        CACHE_DIR="$HOME/.ccache"
-        echo "CCACHE_DIR=$CACHE_DIR" >> "$GITHUB_ENV"
-        echo "CCACHE_MAXSIZE=1G" >> "$GITHUB_ENV"
-        
-        mkdir -p "$CACHE_DIR"
-        
-        echo "Cache configuration:"
-        echo "  Directory: $CACHE_DIR"
-        echo "  Max size: 1G"
-        echo "  Android: ${ANDROID_VER:-unknown}"
-        echo "  Kernel: ${KERNEL_VER:-unknown}"
-        echo "  OOS Version: ${OP_OS_VERSION:-unknown}"
-        echo "  Clang: ${CLANG_VERSION_SHORT:-unknown}"
-        echo "  Device: ${OP_MODEL:-unknown}"
-        echo "::endgroup::"
-    
     - name: Cache ccache
       uses: actions/cache@v5
+      if: ${{ inputs.clean == false || inputs.clean == 'false' }}
       with:
         path: ${{ env.CCACHE_DIR }}
         key: ccache-ksun-v3-${{ env.OP_MODEL }}-${{ env.OP_OS_VERSION }}-${{ env.KERNEL_FULL_VER }}-${{ env.CLANG_VERSION_SHORT }}
@@ -643,54 +622,14 @@ runs:
           ccache-ksun-v3-${{ env.OP_MODEL }}-${{ env.OP_OS_VERSION }}-${{ env.KERNEL_FULL_VER }}-
           ccache-ksun-v3-${{ env.OP_MODEL }}-${{ env.OP_OS_VERSION }}-
    
-    - name: Configure ccache
+    - name: Check ccache
       shell: bash
       run: |
+        echo "::group::Check ccache"
         set -euo pipefail
-        echo "::group::Configure ccache for maximum performance"
         
-        export CCACHE_DIR="$HOME/.ccache"
-        export CCACHE_MAXSIZE="1G"
-        
-        ccache -M "$CCACHE_MAXSIZE"
-        
-        export CCACHE_COMPILERCHECK="content"
-        export CCACHE_BASEDIR="${GITHUB_WORKSPACE}"
-        export CCACHE_NOHASHDIR="true"
-        
-        ccache -o compression=true
-        ccache -o compression_level=3
-        ccache -o direct_mode=true
-        ccache -o hash_dir=false
-        ccache -o file_clone=true
-        ccache -o inode_cache=true
-        ccache -o umask=002
-        
-        if ccache --help 2>&1 | grep -q 'depend_mode'; then
-          ccache -o depend_mode=true
-        fi
-        
-        ccache -o sloppiness=file_macro,time_macros,include_file_mtime,include_file_ctime,pch_defines,system_headers,locale
-        
-        export CCACHE_IGNOREOPTIONS="--sysroot*"
-        
-        {
-          echo "CCACHE_COMPILERCHECK=content"
-          echo "CCACHE_BASEDIR=${GITHUB_WORKSPACE}"
-          echo "CCACHE_NOHASHDIR=true"
-          echo "CCACHE_IGNOREOPTIONS=$CCACHE_IGNOREOPTIONS"
-        } >> "$GITHUB_ENV"
-        
-        echo "✅ ccache configured for production"
-        echo ""
-        echo "Configuration applied:"
-        echo "  Max size: 12G (persisted)"
-        echo "  Base dir: ${GITHUB_WORKSPACE}"
-        echo "  Compression: zstd level 3"
-        echo "  Direct mode: enabled"
-        echo "  File cloning: enabled"
-        echo "  Inode cache: enabled"
-        echo ""
+        echo "Current ccache configuration:"
+        ccache -p
         
         if [ -d "$CCACHE_DIR" ] && find "$CCACHE_DIR" -type f -print -quit 2>/dev/null | grep -q .; then
           echo "✅ Restored cache found"
@@ -702,20 +641,7 @@ runs:
           echo "Cache will be populated for future builds"
         fi
         
-        echo "::endgroup::"
-
-    - name: Handle Clean Build Option
-      if: ${{ inputs.clean }}
-      shell: bash
-      run: |
-        set -euo pipefail
-        echo "::group::Clean build requested"
-        echo "⚠️ Clean build mode enabled - ccache will be bypassed"
-        
-        echo "CCACHE_DISABLE=1" >> "$GITHUB_ENV"
-        
-        echo "✅ ccache disabled for clean build (no cache/stat wipe)"
-        echo "   Shared cache and statistics preserved for concurrent jobs"
+        ccache -z
         echo "::endgroup::"
 
     - name: Clone AnyKernel3 and Other Dependencies
@@ -1568,11 +1494,10 @@ runs:
           export PATH="${BASE_PATH}:${PATH}"
         fi
         
-        if [ "${{ inputs.clean }}" = "true" ]; then
-          echo "🧹 Clean build mode - ccache disabled"
-          export CCACHE_DISABLE=1
-        else
+        if [ "${{ inputs.clean }}" = "false" ]; then
           echo "🚀 ccache-accelerated build"
+        else
+          echo "🧹 Clean build mode"
         fi
         
         OUT=out
@@ -1588,18 +1513,14 @@ runs:
         echo "CCACHE_BASEDIR: ${CCACHE_BASEDIR:-not set}"
         echo ""
         
-        if [ "${{ inputs.clean }}" != "true" ]; then
-          echo "ccache wrapper test:"
-          clang --version 2>&1 | head -n1 || true
-          echo ""
-          echo "ccache configuration:"
-          ccache -p | grep -E "(compression|direct_mode|readonly_direct|depend|sloppiness)" || true
-          echo ""
-          echo "ccache pre-build status:"
-          ccache -s | head -n 20
-        else
-          echo "⚠️ Clean build - ccache bypassed"
-        fi
+        echo "ccache wrapper test:"
+        clang --version 2>&1 | head -n1 || true
+        echo ""
+        echo "ccache configuration:"
+        ccache -p | grep -E "(compression|direct_mode|readonly_direct|depend|sloppiness)" || true
+        echo ""
+        echo "ccache pre-build status:"
+        ccache -s | head -n 20
         echo "============================================"
         
         make O="$OUT" gki_defconfig
@@ -1670,24 +1591,18 @@ runs:
         echo "Timestamp: $KBUILD_BUILD_TIMESTAMP"
         echo "Workspace: $WORKSPACE"
         
-        if [ "${{ inputs.clean }}" != "true" ]; then
-          echo "ccache: ENABLED"
-          echo "  Dir: $CCACHE_DIR"
-          echo "  Base: $CCACHE_BASEDIR"
-          echo "  Max size: $CCACHE_MAXSIZE"
-          echo "  Compression: zstd level 3"
-          echo "  Features: readonly_direct, file_clone, inode_cache, depend"
-        else
-          echo "ccache: DISABLED (clean build)"
-        fi
+        echo "ccache: ENABLED"
+        echo "  Dir: $CCACHE_DIR"
+        echo "  Base: $CCACHE_BASEDIR"
+        echo "  Max size: $CCACHE_MAXSIZE"
+        echo "  Compression: zstd level 3"
+        echo "  Features: readonly_direct, file_clone, inode_cache, depend"
         echo "============================================"
         
-        if [ "${{ inputs.clean }}" != "true" ]; then
-          if [ ! -d "$CCACHE_DIR" ] || [ -z "$(find "$CCACHE_DIR" -type f 2>/dev/null | head -n1)" ]; then
-            echo "🔥 Priming cache with header preprocessing..."
-            make -C "$COMMON_KERNEL_FOLDER" O="$OUT" headers_install prepare 2>&1 | head -n 20 || true
-            echo ""
-          fi
+        if [ ! -d "$CCACHE_DIR" ] || [ -z "$(find "$CCACHE_DIR" -type f 2>/dev/null | head -n1)" ]; then
+          echo "🔥 Priming cache with header preprocessing..."
+          make -C "$COMMON_KERNEL_FOLDER" O="$OUT" headers_install prepare 2>&1 | head -n 20 || true
+          echo ""
         fi
         
         BUILD_START=$(date +%s)
@@ -1733,18 +1648,16 @@ runs:
         echo "Duration: $((BUILD_TIME / 60))m $((BUILD_TIME % 60))s"
         echo "Image: $(numfmt --to=iec-i --suffix=B "$IMG_SIZE")"
         
-        if [ "${{ inputs.clean }}" != "true" ]; then
-          echo ""
-          echo "📊 ccache Post-Build Statistics"
-          echo "============================================"
-          ccache -s
-        fi
+        echo ""
+        echo "📊 ccache Post-Build Statistics"
+        echo "============================================"
+        ccache -s
         echo "============================================"
         echo "::endgroup::"
 
     - name: 📊 ccache Post-Build Statistics
       id: ccache_stats
-      if: ${{ always() && inputs.clean != true }}
+      if: ${{ success() && (inputs.clean == false || inputs.clean == 'false') }}
       shell: bash
       run: |
         set -euo pipefail
@@ -1958,7 +1871,7 @@ runs:
           echo "Compiler: ${CLANG_VERSION:-unknown}"
           echo "Warnings Count: ${{ steps.collect_stats.outputs.warnings_count }}"
           echo "Build Time: ${{ steps.collect_stats.outputs.build_time }}s"
-          if [ "${{ inputs.clean }}" != "true" ]; then
+          if [ "${{ inputs.clean }}" == "false" ]; then
             echo "ccache Hit Rate: ${{ steps.ccache_stats.outputs.hit_rate }}"
             echo "ccache Direct Rate: ${{ steps.ccache_stats.outputs.direct_rate }}"
           else
@@ -2028,7 +1941,7 @@ runs:
           echo "| **Clean Build** | ${{ inputs.clean }} |"
           echo "| **Build Time** | ${{ steps.collect_stats.outputs.build_time }}s |"
           
-          if [ "${{ inputs.clean }}" != "true" ]; then
+          if [ "${{ inputs.clean }}" == "false" ]; then
             echo "| **ccache Hit Rate** | ${{ steps.ccache_stats.outputs.hit_rate }} |"
             echo "| **ccache Direct Rate** | ${{ steps.ccache_stats.outputs.direct_rate }} |"
           fi
