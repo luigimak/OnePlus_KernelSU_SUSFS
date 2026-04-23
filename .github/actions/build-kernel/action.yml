@@ -1349,8 +1349,6 @@ runs:
             ;;
         esac
         
-        patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/common/droidspaces/harden_find_task_by_vpid.patch"
-        
         cat >> "$COMMON_KERNEL_FOLDER/arch/arm64/configs/gki_defconfig" <<EOF
         CONFIG_SYSVIPC=y
         CONFIG_DEVTMPFS=y
