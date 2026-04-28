@@ -39,6 +39,7 @@ runs:
         # Archive, Split, and Upload Cache
         if [ "${{ inputs.debug }}" = "true" ]; then set -x; fi
         
+        cd "$GITHUB_WORKSPACE"
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
         
@@ -53,12 +54,12 @@ runs:
         
         echo "::group:: Checking Release State"
         
-        git fetch --tags --force
+        REMOTE_URL="https://x-access-token:${GH_TOKEN}@github.com/${TARGET_REPO}.git"
         
-        if ! git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+        if ! git ls-remote --tags "$REMOTE_URL" | grep -q "refs/tags/$TAG_NAME"; then
           echo "Tag '$TAG_NAME' not found. Creating backdated release..."
           GIT_COMMITTER_DATE="2015-01-01T12:00:00" git tag -a "$TAG_NAME" -m "General Cache Storage"
-          if git push origin "$TAG_NAME" --force; then
+          if git push "$REMOTE_URL" "$TAG_NAME" --force; then
             gh release create "$TAG_NAME" --title "General Cache" --notes "Automated storage for build assets" --repo "$TARGET_REPO" || true
           else
             echo "Push failed, tag might have been created by a parallel job. Continuing..."
