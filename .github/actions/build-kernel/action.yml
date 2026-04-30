@@ -337,7 +337,7 @@ runs:
         KERNEL_PLATFORM_DIR="$CONFIG_DIR/kernel_platform"
         COMMON_KERNEL_DIR="$KERNEL_PLATFORM_DIR/common"
         MSM_KERNEL_DIR="$KERNEL_PLATFORM_DIR/msm-kernel"
-        AK3_DIR="$GITHUB_WORKSPACE/AnyKernel3"
+        AK3_DIR="$CONFIG_DIR/AnyKernel3"
         DEBUG_ARTIFACTS_DIR="$GITHUB_WORKSPACE/debug_artifacts"
         KERNEL_PATCHES_DIR="$GITHUB_WORKSPACE/kernel_patches"
         SUSFS_DIR="$GITHUB_WORKSPACE/susfs4ksu"
@@ -715,14 +715,13 @@ runs:
         ccache -z
         echo "::endgroup::"
 
-    - name: Fetch AnyKernel3 and Other Dependencies
+    - name: Fetch SusFS and Other Dependencies
       shell: bash
       run: |
         echo "::group::Fetch dependencies"
         set -euo pipefail
-        echo "Fetching AnyKernel3 and other dependencies..."
+        echo "Fetching SusFS and other dependencies..."
         
-        ANYKERNEL_BRANCH="gki-2.0"
         
         if [ "${{ env.OP_SUSFS }}" = true ]; then
           # Determine SUSFS branch/commit to use
@@ -749,8 +748,6 @@ runs:
             echo "🔧 Using resolved SUSFS ref: $SUSFS_BRANCH"
           fi
         fi
-        
-        echo "Using AnyKernel3 branch: $ANYKERNEL_BRANCH"
         
         retry_fetch_archive() {
           local url="$1"
@@ -840,8 +837,7 @@ runs:
           return 1
         }
         
-        retry_clone "https://github.com/TheWildJames/AnyKernel3.git" "$ANYKERNEL_BRANCH"
-        retry_clone "https://github.com/TheWildJames/kernel_patches.git" "main"
+        retry_clone "https://github.com/TheWildJames/kernel_patches.git" "main" "1"
         
         if [ "${{ env.OP_SUSFS }}" = true ]; then
           echo "Using SUSFS branch/commit: $SUSFS_BRANCH"
