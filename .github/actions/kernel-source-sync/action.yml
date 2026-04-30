@@ -139,7 +139,8 @@ runs:
                                 found_in_cache = True
                             
                         if not found_in_cache:
-                            print(f"  [FATAL ERROR] Toolchain {base_filename} NOT FOUND in GitHub Release cache!")
+                            print(f"::error::[FATAL ERROR] Toolchain {base_filename} NOT FOUND in GitHub Release cache!")
+                            print(f"::error::[FATAL ERROR] Please Run Mirror Toolchain Workflow or select sync toolchain during build!!!")
                             return False
                     
                     if found_in_cache:
