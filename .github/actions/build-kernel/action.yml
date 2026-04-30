@@ -1435,8 +1435,8 @@ runs:
       shell: bash
       if: ${{ env.OP_DS == 'true' }}
       run: |
-        set -euo pipefail
         echo "::group::Add Droidspaces Support"
+        set -euo pipefail
         cd "$COMMON_KERNEL_FOLDER"
         
         echo "Applying patch to enable SYSVIPC without breaking ABI"
@@ -1446,6 +1446,14 @@ runs:
             ;;
           wild/sm8550|wild/sm7550)
             patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/common/droidspaces/fix_sysvipc_kabi_1_2_3.patch"
+            ;;
+          wild/sm8450|wild/sm8475|wild/mt6895|wild/mt6983|wild/mt6789)
+            if [ "$ANDROID_VER" = "android12" ] && [ "$KERNEL_VER" = "5.10" ]; then
+              patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/common/droidspaces/fix_sysvipc_kabi_bypass_a16-6.12_below.patch"
+              patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/common/droidspaces/fix_abi_padding_for_posix_mqueue.patch"
+            else
+              patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/common/droidspaces/fix_sysvipc_kabi_6_7_8.patch"
+            fi
             ;;
           *)
             patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/common/droidspaces/fix_sysvipc_kabi_6_7_8.patch"
