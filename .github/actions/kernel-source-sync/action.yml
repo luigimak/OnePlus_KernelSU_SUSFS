@@ -105,7 +105,7 @@ runs:
                         check_single = f"curl -IsL {curl_headers} --retry 10 --connect-timeout 30 -o /dev/null -w '%{{http_code}}' {BASE_URL}/{base_filename}"
                         if subprocess.check_output(check_single, shell=True).decode().strip() == "200":
                             if DEBUG: print(f"  [CACHE] Downloading single file: {base_filename}")
-                            aria_cmd = f"aria2c -x16 -s16 -k1M -j16 --retry-wait=5 --max-tries=10 -d {shm_workspace} --file-allocation=none {aria_quiet_flags} {aria2_headers} -o {base_filename} {BASE_URL}/{base_filename}"
+                            aria_cmd = f"aria2c -x4 -s1 -k1M -j16 --retry-wait=5 --max-tries=10 -d {shm_workspace} --file-allocation=none {aria_quiet_flags} {aria2_headers} -o {base_filename} {BASE_URL}/{base_filename}"
                             subprocess.run(aria_cmd, shell=True, check=True, capture_output=not DEBUG)
                             found_in_cache = True
                         else:
@@ -130,7 +130,7 @@ runs:
                                         f.write(f"{part_url}\n  out={p_name}\n")
                                 
                                 aria_bulk_cmd = (
-                                    f"aria2c -x16 -s16 -k1M -j16 --retry-wait=5 --max-tries=10 -d {shm_workspace} --file-allocation=none "
+                                    f"aria2c -x4 -s1 -k1M -j16 --retry-wait=5 --max-tries=10 -d {shm_workspace} --file-allocation=none "
                                     f"{aria_quiet_flags} {aria2_headers} "
                                     f"--input-file={input_file_path}"
                                 )
@@ -152,7 +152,7 @@ runs:
                     else:
                         direct_file = f"dynamic_file.tar.gz"
                         archive_path = os.path.join(shm_workspace, direct_file)
-                        aria_cmd = f"aria2c -x16 -s16 -k1M -j16 --allow-overwrite=true --retry-wait=5 --max-tries=10 -d {shm_workspace} -o {direct_file} {aria_quiet_flags} {aria2_headers} '{url}'"
+                        aria_cmd = f"aria2c -x4 -s1 -k1M -j16 --allow-overwrite=true --retry-wait=5 --max-tries=10 -d {shm_workspace} -o {direct_file} {aria_quiet_flags} {aria2_headers} '{url}'"
                         if DEBUG: print(f"  [DIRECT] Fetching: {url}")
                         subprocess.run(aria_cmd, shell=True, check=True, capture_output=not DEBUG)
                         extract_cmd = f"tar -I 'pigz -p {NPROC} -b 256' -x --record-size=1M -f {archive_path} -C {path} {strip}"

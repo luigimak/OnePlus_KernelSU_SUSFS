@@ -173,7 +173,7 @@ jobs:
           else
             echo "📥 Not found. Downloading ${{ matrix.type_label }} from source..."
             
-            aria2c -x16 -s16 -k1M -j5 --file-allocation=none --console-log-level=error --summary-interval=0 --retry-wait=5 --max-tries=10 -o "$FILENAME" "${{ matrix.url }}"
+            aria2c -x4 -s1 -k1M -j5 --file-allocation=none --console-log-level=error --summary-interval=0 --retry-wait=5 --max-tries=10 -o "$FILENAME" "${{ matrix.url }}"
             
             FILE_SIZE=$(stat -c%s "$FILENAME")
             MAX_SIZE=2000000000 # ~1.86GB
