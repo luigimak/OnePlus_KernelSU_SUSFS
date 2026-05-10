@@ -42,6 +42,14 @@ inputs:
     required: false
     type: boolean
     default: false
+  enable_afdo_profiling:
+    description: 'Build with -fdebug-info-for-profiling for ETM data collection (AutoFDO profile generation). Applied only when no stock profile is found in kernel source.'
+    required: false
+    default: 'false'
+  afdo_profile_url:
+    description: 'HTTPS URL to AutoFDO kernel.afdo profile (fallback for GKI versions without stock in-source profile, e.g. android15-6.6)'
+    required: false
+    default: ''
   github_token:
     description: 'GitHub Token'
     required: true
@@ -284,6 +292,15 @@ runs:
           O2|O3) ;;
           *) errors+=("optimize_level must be O2 or O3. Got: '$optimize'"); ;;
         esac
+
+        afdo_profile_url="${OP_AFDO_PROFILE_URL:-}"
+        if [[ -n "$afdo_profile_url" ]]; then
+          if [[ ! "$afdo_profile_url" =~ ^https:// ]]; then
+            errors+=("afdo_profile_url must be an HTTPS URL. Got: '$afdo_profile_url'")
+          elif [[ "$afdo_profile_url" =~ [[:space:]] ]]; then
+            errors+=("afdo_profile_url cannot contain spaces. Got: '$afdo_profile_url'")
+          fi
+        fi
         
         if [ ${#errors[@]} -ne 0 ]; then
           echo "Found ${#errors[@]} validation error(s):" >&2
@@ -1359,7 +1376,6 @@ runs:
         CONFIG_TMPFS_POSIX_ACL=y
         EOF
 
-
     - name: Add BBR
       if: ${{ env.OP_BBR == 'true' }}
       shell: bash
@@ -1647,9 +1663,9 @@ runs:
             KCFLAGS_EXTRA="-mcpu=oryon-1 ${KCFLAGS_EXTRA}"
             ;;
         esac
-        
+
         scripts/config --file "$OUT/.config" -e LTO_CLANG -d LTO_CLANG_NONE -d LTO_CLANG_THIN -d LTO_CLANG_FULL
-        
+
         case "${{ env.OP_LTO}}" in
           "none") scripts/config --file "$OUT/.config" -e LTO_CLANG_NONE ;;
           "thin") scripts/config --file "$OUT/.config" -e LTO_CLANG_THIN ;;
@@ -1659,8 +1675,39 @@ runs:
             exit 1
             ;;
         esac
-        
-        
+
+        # AutoFDO: stock in-source → URL fallback → instrumentation mode
+        AFDO_PROFILE=""
+        for _candidate in \
+          "$COMMON_KERNEL_FOLDER/android/gki/aarch64/afdo/kernel.afdo" \
+          "$COMMON_KERNEL_FOLDER/gki/aarch64/afdo/kernel.afdo"; do
+          if [ -f "$_candidate" ]; then
+            AFDO_PROFILE="$_candidate"
+            echo "✅ AutoFDO: stock profile → $AFDO_PROFILE"
+            break
+          fi
+        done
+
+        if [ -z "$AFDO_PROFILE" ] && [ -n "${{ inputs.afdo_profile_url }}" ]; then
+          echo "📊 AutoFDO: downloading profile from ${{ inputs.afdo_profile_url }}..."
+          curl -LfsS --retry 3 --retry-delay 5 --connect-timeout 30 \
+            "${{ inputs.afdo_profile_url }}" -o /tmp/kernel.afdo
+          AFDO_PROFILE="/tmp/kernel.afdo"
+          echo "✅ AutoFDO: URL profile → $AFDO_PROFILE"
+        fi
+
+        if [ -n "$AFDO_PROFILE" ]; then
+          scripts/config --file "$OUT/.config" -e AUTOFDO_CLANG
+          KCFLAGS_EXTRA="$KCFLAGS_EXTRA -fprofile-sample-use=$AFDO_PROFILE"
+          echo "✅ AutoFDO: CONFIG_AUTOFDO_CLANG=y, -fprofile-sample-use=$AFDO_PROFILE"
+        elif [ "${{ inputs.enable_afdo_profiling }}" = "true" ]; then
+          scripts/config --file "$OUT/.config" -e AUTOFDO_CLANG
+          KCFLAGS_EXTRA="$KCFLAGS_EXTRA -fdebug-info-for-profiling"
+          echo "🔍 AutoFDO: instrumentation mode (-fdebug-info-for-profiling)"
+        else
+          echo "ℹ️  AutoFDO: no profile found, skipping"
+        fi
+
         make LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" O="$OUT" olddefconfig
         
         KCFLAGS="$KCFLAGS -Wno-error -pipe ${KCFLAGS_EXTRA}"

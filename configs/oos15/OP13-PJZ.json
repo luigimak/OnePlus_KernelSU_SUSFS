@@ -22,5 +22,6 @@
   "ip_set": true,
   "unicode": true,
   "ntsync": true,
+  "afdo_profile_url": "https://raw.githubusercontent.com/luigimak/OnePlus_KernelSU_SUSFS/main_afdo/afdo/android16-6.12/kernel.afdo",
   "uname": "OP-WILD"
 }
