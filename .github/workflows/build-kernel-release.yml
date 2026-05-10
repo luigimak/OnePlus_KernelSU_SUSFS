@@ -58,6 +58,10 @@ on:
         description: 'Custom kernel build timestamp for uname -a (e.g. "Tue Feb 10 10:01:02 UTC 2026"). Leave empty for current time.'
         type: string
         default: ''
+      enable_afdo_profiling:
+        description: 'Build with -fdebug-info-for-profiling for ETM data collection (AutoFDO profile generation). Overrides afdo_profile resolution for all devices.'
+        type: boolean
+        default: false
       android12-5_10_susfs_branch_or_commit:
         description: 'Enter SusFS Branch or commit hash for android12-5.10'
         type: string
@@ -471,6 +475,8 @@ jobs:
           - Create Release: ${{ inputs.make_release && '✅ Yes' || '❌ No' }}
           - Create Debug Artifacts: ${{ inputs.debug && '✅ Yes' || '❌ No' }}
           - Sync toolchains: ${{ inputs.mirror_toolchains && '✅ Yes' || '❌ No' }}
+          - AutoFDO Profiling: ${{ inputs.enable_afdo_profiling && '🔍 Yes (data collection mode)' || '❌ No' }}
+          - AutoFDO Profile: per-device via afdo_profile JSON field (repo file → stock in-source)
           
           **SUSFS Configuration:**
           EOF
@@ -648,6 +654,8 @@ jobs:
           build_timestamp: ${{ inputs.build_timestamp }}
           clean: ${{ inputs.clean_build }}
           debug: ${{ inputs.debug }}
+          enable_afdo_profiling: ${{ inputs.enable_afdo_profiling }}
+          afdo_profile: ${{ matrix.afdo_profile }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 📊 Build statistics

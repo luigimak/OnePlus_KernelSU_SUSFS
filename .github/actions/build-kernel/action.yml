@@ -42,6 +42,14 @@ inputs:
     required: false
     type: boolean
     default: false
+  enable_afdo_profiling:
+    description: 'Build with -fdebug-info-for-profiling for ETM data collection (AutoFDO profile generation). Applied only when no stock profile is found in kernel source.'
+    required: false
+    default: 'false'
+  afdo_profile:
+    description: 'Filename of AutoFDO profile in afdo/<android_version>-<kernel_version>/ repo directory (e.g. kernel.afdo, custom.afdo). Overrides stock in-source auto-detection.'
+    required: false
+    default: ''
   github_token:
     description: 'GitHub Token'
     required: true
@@ -284,6 +292,13 @@ runs:
           O2|O3) ;;
           *) errors+=("optimize_level must be O2 or O3. Got: '$optimize'"); ;;
         esac
+
+        afdo_profile="${OP_AFDO_PROFILE:-}"
+        if [[ -n "$afdo_profile" ]]; then
+          if [[ "$afdo_profile" =~ [[:space:]] || "$afdo_profile" =~ / ]]; then
+            errors+=("afdo_profile must be a plain filename with no spaces or slashes. Got: '$afdo_profile'")
+          fi
+        fi
         
         if [ ${#errors[@]} -ne 0 ]; then
           echo "Found ${#errors[@]} validation error(s):" >&2
@@ -1408,7 +1423,6 @@ runs:
         CONFIG_TMPFS_POSIX_ACL=y
         EOF
 
-
     - name: Add BBR
       if: ${{ env.OP_BBR == 'true' }}
       shell: bash
@@ -1703,9 +1717,9 @@ runs:
             KCFLAGS_EXTRA="-mcpu=oryon-1 ${KCFLAGS_EXTRA}"
             ;;
         esac
-        
+
         scripts/config --file "$OUT/.config" -e LTO_CLANG -d LTO_CLANG_NONE -d LTO_CLANG_THIN -d LTO_CLANG_FULL
-        
+
         case "${{ env.OP_LTO}}" in
           "none") scripts/config --file "$OUT/.config" -e LTO_CLANG_NONE ;;
           "thin") scripts/config --file "$OUT/.config" -e LTO_CLANG_THIN ;;
@@ -1715,8 +1729,45 @@ runs:
             exit 1
             ;;
         esac
-        
-        
+
+        # AutoFDO: repo file (explicit) → stock in-source → instrumentation mode
+        if [ "${{ inputs.enable_afdo_profiling }}" = "true" ]; then
+          scripts/config --file "$OUT/.config" -e AUTOFDO_CLANG
+          KCFLAGS_EXTRA="$KCFLAGS_EXTRA -fdebug-info-for-profiling"
+          echo "🔍 AutoFDO: instrumentation mode (-fdebug-info-for-profiling)"
+        else
+          AFDO_PROFILE=""
+          if [ -n "${{ inputs.afdo_profile }}" ]; then
+            _repo_profile="$GITHUB_WORKSPACE/afdo/${OP_ANDROID_VERSION}-${OP_KERNEL_VERSION}/${{ inputs.afdo_profile }}"
+            if [ -f "$_repo_profile" ]; then
+              AFDO_PROFILE="$_repo_profile"
+              echo "✅ AutoFDO: repo profile → $AFDO_PROFILE"
+            else
+              echo "::warning::AutoFDO: afdo_profile='${{ inputs.afdo_profile }}' not found at $_repo_profile, falling back to stock"
+            fi
+          fi
+
+          if [ -z "$AFDO_PROFILE" ]; then
+            for _candidate in \
+              "$COMMON_KERNEL_FOLDER/android/gki/aarch64/afdo/kernel.afdo" \
+              "$COMMON_KERNEL_FOLDER/gki/aarch64/afdo/kernel.afdo"; do
+              if [ -f "$_candidate" ]; then
+                AFDO_PROFILE="$_candidate"
+                echo "✅ AutoFDO: stock profile → $AFDO_PROFILE"
+                break
+              fi
+            done
+          fi
+
+          if [ -n "$AFDO_PROFILE" ]; then
+            scripts/config --file "$OUT/.config" -e AUTOFDO_CLANG
+            export CLANG_AUTOFDO_PROFILE="$AFDO_PROFILE"
+            echo "✅ AutoFDO: CONFIG_AUTOFDO_CLANG=y, CLANG_AUTOFDO_PROFILE=$AFDO_PROFILE"
+          else
+            echo "ℹ️  AutoFDO: no profile found, skipping"
+          fi
+        fi
+
         make LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" O="$OUT" olddefconfig
         
         KCFLAGS="$KCFLAGS -Wno-error -pipe ${KCFLAGS_EXTRA}"
