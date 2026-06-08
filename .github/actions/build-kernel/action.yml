@@ -1422,6 +1422,24 @@ runs:
         CONFIG_NET_SCH_FQ_CODEL=y
         EOF
 
+    - name: Apply BBRv3
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Apply BBRv3 patches"
+        cd "$COMMON_KERNEL_FOLDER"
+        cat >> "$COMMON_KERNEL_FOLDER/arch/arm64/configs/gki_defconfig" <<EOF
+        CONFIG_TCP_CONG_BBR3=y
+        EOF
+        PATCH_URL="https://raw.githubusercontent.com/luigimak/kernel_patches/refs/heads/bbr3/oneplus/bbr3/0001-Test-$ANDROID_VER-$KERNEL_VER-bbrv3.patch"
+        if curl -f -Ls "$PATCH_URL" -o temp.patch; then
+          patch -p1 -F 3 < temp.patch
+          rm temp.patch
+        fi
+        
+        echo "✅ BBRv3 patches applied"
+        echo "::endgroup::"
+
     - name: Add TTL Target Support
       if: ${{ env.OP_TTL == 'true' }}
       shell: bash
