@@ -892,7 +892,7 @@ jobs:
           
           JSON_BUILD_DATA=$(jq -c '.' ./downloaded-artifacts/matrix.json)
           
-          for file in $(find downloaded-artifacts -maxdepth 1 -name "*.zip" -type f | sort); do
+          for file in $(find downloaded-artifacts -maxdepth 1 -name "AK3_*.zip" -type f | sort); do
             if [ -f "$file" ]; then
               zipname=$(basename "$file" .zip)
               rest="${zipname#AK3_}"
@@ -1231,7 +1231,7 @@ jobs:
       - name: 📤 Upload Release Assets Dynamically
         run: |
           for file in ./downloaded-artifacts/*.zip; do
-            if [ -f "$file" ]; then
+            if [ -f "$file" ] && [ "$(basename "$file")" != "ccache-binary.zip" ]; then
               echo "Uploading $file..."
               gh release upload "${{ env.NEW_TAG }}" "$file" --clobber
             fi
@@ -1247,13 +1247,13 @@ jobs:
           ## 🎉 Release Created Successfully
           
           **Tag:** [\`${{ env.NEW_TAG }}\`](${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ env.NEW_TAG }})  
-          **Kernels:** $(find ./downloaded-artifacts -maxdepth 1 -name "*.zip" -type f | wc -l)
+          **Kernels:** $(find ./downloaded-artifacts -maxdepth 1 -name "AK3_*.zip" -type f | wc -l)
           
           ### 📦 Assets
           EOF
           
           for zip in ./downloaded-artifacts/*.zip; do
-            if [ -f "$zip" ]; then
+            if [ -f "$zip" ] && [ "$(basename "$zip")" != "ccache-binary.zip" ]; then
               name=$(basename "$zip")
               size=$(stat -c%s "$zip")
               size_mb=$(echo "scale=2; $size / 1024 / 1024" | bc)
