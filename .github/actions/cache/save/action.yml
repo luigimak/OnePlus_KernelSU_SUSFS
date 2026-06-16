@@ -110,6 +110,17 @@ runs:
           
           echo "::group:: Uploading Assets"
           MAX_SIZE=2000000000 # ~1.86GB
+
+          echo "Cleaning up stale assets for $BASE_FILENAME..."
+          EXISTING=$(gh release view "$TAG_NAME" --repo "$TARGET_REPO" --json assets \
+            --jq ".assets[] | select(.name | startswith(\"$BASE_FILENAME\")) | .name" 2>/dev/null || true)
+          if [ -n "$EXISTING" ]; then
+            while IFS= read -r asset_name; do
+              [ -z "$asset_name" ] && continue
+              gh release delete-asset "$TAG_NAME" "$asset_name" --yes --repo "$TARGET_REPO" > /dev/null 2>&1 || true
+            done <<< "$EXISTING"
+            echo "Deleted stale assets."
+          fi
           
           upload_with_retry() {
             local file=$1
