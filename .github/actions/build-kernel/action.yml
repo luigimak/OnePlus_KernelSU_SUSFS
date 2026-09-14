@@ -792,7 +792,7 @@ runs:
           
           local download_url=""
           if [[ "$url" == *"github.com"* ]]; then
-              download_url="${url%.git}/archive/refs/heads/${branch}.tar.gz"
+              download_url="${url%.git}/archive/${branch}.tar.gz"
           elif [[ "$url" == *"gitlab.com"* ]]; then
               download_url="${url%.git}/-/archive/${branch}/${repo_name}-${branch}.tar.gz"
           else
@@ -854,11 +854,11 @@ runs:
           return 1
         }
         
-        retry_clone "https://github.com/WildKernels/kernel_patches.git" "main" "1"
+        retry_clone "https://github.com/luigimak/kernel_patches.git" "arb" "1"
         
         if [ "${{ env.OP_SUSFS }}" = true ]; then
           echo "Using SUSFS branch/commit: $SUSFS_BRANCH"
-          if ! retry_fetch_archive "https://gitlab.com/simonpunk/susfs4ksu.git" "$SUSFS_BRANCH"; then
+          if ! retry_fetch_archive "https://github.com/luigimak/susfs4ksu.git" "$SUSFS_BRANCH"; then
             echo "::error::Failed to fetch SUSFS archive after multiple attempts"
             exit 1
           fi
@@ -2364,7 +2364,7 @@ runs:
             echo "| **SUSFS Version** | ${SUSVER:-unknown} |"
             
             if [ "$SUSFS_SHA" != "unknown" ]; then
-              echo "| **SUSFS Commit** | [\`${SUSFS_SHA:0:8}\`](https://gitlab.com/simonpunk/susfs4ksu/-/commit/$SUSFS_SHA) |"
+              echo "| **SUSFS Commit** | [\`${SUSFS_SHA:0:8}\`](https://github.com/luigimak/susfs4ksu/commit/$SUSFS_SHA) |"
             else
               echo "| **SUSFS Commit** | unknown |"
             fi
