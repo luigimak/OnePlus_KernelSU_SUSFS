@@ -58,6 +58,11 @@ on:
         description: 'Custom kernel build timestamp for uname -a (e.g. "Tue Feb 10 10:01:02 UTC 2026"). Leave empty for current time.'
         type: string
         default: ''
+      susfs_options:
+        description: 'Enable or disable SUSFS for all selected devices'
+        required: true
+        type: boolean
+        default: true
       android12-5_10_susfs_branch_or_commit:
         description: 'Enter SusFS Branch or commit hash for android12-5.10'
         type: string
@@ -113,7 +118,17 @@ jobs:
           echo "::group::Matrix generation"
           
           input="${{ github.event.inputs.op_model }}"
+          susfs_options="${{ inputs.susfs_options }}"
           ksu_options_raw='${{ github.event.inputs.ksu_options }}'
+          if [[ "$susfs_options" != "true" && "$susfs_options" != "false" ]]; then
+            echo "::error::susfs_options must be true or false. Got: '$susfs_options'"
+            exit 1
+          fi
+          if [[ "$susfs_options" == "false" && "${{ inputs.make_release }}" == "true" ]]; then
+            echo "::error::Cannot create a release when SUSFS is disabled; release tags require a SUSFS version."
+            exit 1
+          fi
+
           if ! ksu_options_normalized=$(echo "$ksu_options_raw" | jq -c 'map(if .type then .type |= ascii_upcase | if .hash == null then if .type == "KSUN" then .hash = "dev" elif .type == "KSU" then .hash = "main" else .hash end else . end else error("No type found") end)' 2>&1); then
             echo "::error::ksu_options validation failed: $ksu_options_normalized"
             exit 1
@@ -179,6 +194,7 @@ jobs:
               .model
             )
           ')
+          filtered=$(echo "$filtered" | jq --argjson susfs "$susfs_options" 'map(.susfs = $susfs)')
           
           if [ "$count" -eq 0 ]; then
             echo "::error::No config files found for input '$input' after applying filters!"
@@ -484,6 +500,7 @@ jobs:
           - Create Release: ${{ inputs.make_release && '✅ Yes' || '❌ No' }}
           - Create Debug Artifacts: ${{ inputs.debug && '✅ Yes' || '❌ No' }}
           - Sync toolchains: ${{ inputs.mirror_toolchains && '✅ Yes' || '❌ No' }}
+          - SUSFS: ${{ inputs.susfs_options && '✅ Yes' || '❌ No' }}
           
           **SUSFS Configuration:**
           EOF
