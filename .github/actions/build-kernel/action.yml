@@ -784,26 +784,39 @@ runs:
               aria_log_flags="--summary-interval=5" # Show progress every 5s in debug
           fi
           
-          local aria2_headers=(
-            "--header=User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            "--header=Accept: */*"
-            "--header=Connection: keep-alive"
+          local user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          local aria2_args=(
+            --user-agent="$user_agent"
+            --header "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,application/octet-stream,*/*;q=0.8"
+            --header "Accept-Language: en-US,en;q=0.9"
+            --header "Sec-Fetch-Dest: document"
+            --header "Sec-Fetch-Mode: navigate"
+            --header "Sec-Fetch-Site: none"
+            --header "Sec-Fetch-User: ?1"
+            --header "Upgrade-Insecure-Requests: 1"
           )
           
           local download_url=""
           if [[ "$url" == *"github.com"* ]]; then
               download_url="${url%.git}/archive/refs/heads/${branch}.tar.gz"
           elif [[ "$url" == *"gitlab.com"* ]]; then
-              download_url="${url%.git}/-/archive/${branch}/${repo_name}-${branch}.tar.gz"
+              local project_path=$(echo "$url" | sed -E 's#^https?://gitlab\.com/##; s#\.git$##; s#/#%2F#g')
+              download_url="https://gitlab.com/api/v4/projects/${project_path}/repository/archive.tar.gz?sha=${branch}"
           else
               echo "::error::Unsupported host: $url"
               return 1
           fi
           
           while [ $attempt -le $max_attempts ]; do
+              local conn=1
+              case $attempt in
+                1) conn=16 ;;
+                2) conn=4 ;;
+                *) conn=1 ;;
+              esac
               echo " Attempt $attempt/$max_attempts: High-speed fetch for $repo_name ($branch)"
               
-              if aria2c -x16 -s16 -j16 -k1M --retry-wait=2 --max-tries=5 -d "/dev/shm" -o "$archive_name" --allow-overwrite=true "${aria2_headers[@]}" $aria_log_flags "$download_url"; then
+              if aria2c -x"$conn" -s"$conn" -j16 -k1M --retry-wait=2 --max-tries=5 -d "/dev/shm" -o "$archive_name" --allow-overwrite=true "${aria2_args[@]}" $aria_log_flags "$download_url"; then
                   mkdir -p "$repo_name"
                   if tar -I "pigz -p $nproc -b 256" -x --record-size=1M -f "$shm_path" -C "$repo_name" --strip-components=1 --no-same-owner; then
                       echo "✅ Success: $repo_name synced"
