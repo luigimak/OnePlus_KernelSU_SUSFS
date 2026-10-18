@@ -2088,6 +2088,15 @@ runs:
           cp build.log "$DEBUG_ARTIFACTS_FOLDER/build.log"
           cp install.log "$DEBUG_ARTIFACTS_FOLDER/install.log"
           rsync -av --no-links --exclude='build' "$COMMON_KERNEL_FOLDER/out/install/lib/modules"/*/ "$DEBUG_ARTIFACTS_FOLDER"
+          if [ "$OP_MODEL" = "OP13" ] && [ "$OP_OS_VERSION" = "A16" ]; then
+            QCOM_SCM_MODULE=$(find "$COMMON_KERNEL_FOLDER/out/install/lib/modules" -type f -name 'qcom-scm.ko' -print -quit)
+            if [ -z "$QCOM_SCM_MODULE" ]; then
+              echo "::error::qcom-scm.ko was not installed for the OP13 A16 debug build"
+              exit 1
+            fi
+            cp "$QCOM_SCM_MODULE" "$DEBUG_ARTIFACTS_FOLDER/qcom-scm.ko"
+            echo "✅ qcom-scm.ko copied to the root of the debug artifacts"
+          fi
           cp "$COMMON_KERNEL_FOLDER/out/vmlinux" "$DEBUG_ARTIFACTS_FOLDER/vmlinux"
           cp "$COMMON_KERNEL_FOLDER/out/Module.symvers" "$DEBUG_ARTIFACTS_FOLDER/Module.symvers"
           cp "$COMMON_KERNEL_FOLDER/out/System.map" "$DEBUG_ARTIFACTS_FOLDER/System.map"
@@ -2464,6 +2473,15 @@ runs:
         name: ${{ env.DEBUG_ZIP_NAME }}
         path: ${{ env.DEBUG_ARTIFACTS_FOLDER }}
         compression-level: 9
+        retention-days: 90
+
+    - name: Upload OP13 A16 qcom-scm module
+      if: ${{ success() && inputs.debug == 'true' && env.OP_MODEL == 'OP13' && env.OP_OS_VERSION == 'A16' }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: qcom-scm-${{ env.ZIP_NAME }}
+        path: ${{ env.DEBUG_ARTIFACTS_FOLDER }}/qcom-scm.ko
+        archive: false
         retention-days: 90
 
     - name: Upload Artifacts
