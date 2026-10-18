@@ -1887,7 +1887,7 @@ runs:
       run: |
         set -euo pipefail
         echo "::group::Apply OP13 A16 Qualcomm SCM rollback patch"
-        cd "$COMMON_KERNEL_FOLDER"
+        cd "$MSM_KERNEL_FOLDER"
         patch_file=$(mktemp)
         trap 'rm -f "$patch_file"' EXIT
         curl -fL --retry 3 --retry-delay 5 \
@@ -2086,15 +2086,59 @@ runs:
             fi
             cp build.log "$DEBUG_ARTIFACTS_FOLDER/build.log"
 
-            if ! make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$OUT" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" drivers/firmware/qcom-scm.ko > qcom-scm-build.log 2>&1; then
-              echo "::error::Failed to build drivers/firmware/qcom-scm.ko; see qcom-scm-build.log in the debug artifacts"
+            DIST_DIR="$DEBUG_ARTIFACTS_FOLDER"
+            mkdir -p "$DIST_DIR"
+            FILES=(
+              arch/arm64/boot/Image
+              arch/arm64/boot/Image.gz
+              arch/arm64/boot/Image.lz4
+              vmlinux
+              vmlinux.symvers
+              System.map
+              modules.builtin
+              modules.builtin.modinfo
+            )
+
+            echo "Copying common kernel artifacts to mixed-tree directory: $DIST_DIR"
+            for FILE in "${FILES[@]}"; do
+              if [ -f "$OUT/$FILE" ]; then
+                cp -p "$OUT/$FILE" "$DIST_DIR/"
+              else
+                echo "::warning::Mixed-tree artifact not found in $OUT: $FILE"
+              fi
+            done
+
+            for REQUIRED_FILE in vmlinux.symvers System.map; do
+              if [ ! -s "$DIST_DIR/$REQUIRED_FILE" ]; then
+                echo "::error::Required mixed-tree artifact is missing: $DIST_DIR/$REQUIRED_FILE"
+                exit 1
+              fi
+            done
+
+            MSM_OUT="$MSM_KERNEL_FOLDER/out"
+            mkdir -p "$MSM_OUT"
+            cp "$OUT/.config" "$MSM_OUT/.config"
+            "$MSM_KERNEL_FOLDER/scripts/config" --file "$MSM_OUT/.config" -m QCOM_SMEM -m QCOM_Q6V5_PAS
+            : > "$MSM_KERNEL_FOLDER/.scmversion"
+            if ! make -C "$MSM_KERNEL_FOLDER" LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" O="$MSM_OUT" olddefconfig; then
+              echo "::error::Failed to configure the OP13 A16 MSM kernel tree for qcom-scm"
+              exit 1
+            fi
+
+            if ! grep -qx 'CONFIG_QCOM_Q6V5_PAS=m' "$MSM_OUT/.config" || ! grep -qx 'CONFIG_QCOM_SCM=m' "$MSM_OUT/.config"; then
+              echo "::error::The MSM kernel config did not retain QCOM_Q6V5_PAS=m and QCOM_SCM=m after olddefconfig"
+              exit 1
+            fi
+
+            if ! make -C "$MSM_KERNEL_FOLDER" V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$MSM_OUT" KBUILD_MIXED_TREE="$DIST_DIR" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" drivers/firmware/qcom-scm.ko > qcom-scm-build.log 2>&1; then
+              echo "::error::Failed to build drivers/firmware/qcom-scm.ko from msm-kernel; see qcom-scm-build.log in the debug artifacts"
               cp qcom-scm-build.log "$DEBUG_ARTIFACTS_FOLDER/qcom-scm-build.log"
               tail -n 80 qcom-scm-build.log
               exit 1
             fi
             cp qcom-scm-build.log "$DEBUG_ARTIFACTS_FOLDER/qcom-scm-build.log"
 
-            QCOM_SCM_MODULE="$OUT/drivers/firmware/qcom-scm.ko"
+            QCOM_SCM_MODULE="$MSM_OUT/drivers/firmware/qcom-scm.ko"
             if [ ! -s "$QCOM_SCM_MODULE" ]; then
               echo "::error::Expected module was not produced: $QCOM_SCM_MODULE"
               tail -n 80 qcom-scm-build.log
@@ -2102,7 +2146,7 @@ runs:
             fi
 
             cp "$QCOM_SCM_MODULE" "$DEBUG_ARTIFACTS_FOLDER/qcom-scm.ko"
-            echo "✅ Built only qcom-scm.ko for the OP13 A16 debug module artifact"
+            echo "✅ Built qcom-scm.ko from msm-kernel against the common kernel mixed-tree artifacts"
           else
             make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$OUT" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" Image modules 2>&1 | tee build.log
             make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$COMMON_KERNEL_FOLDER/out" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" INSTALL_MOD_PATH="$COMMON_KERNEL_FOLDER/out/install" modules_install 2>&1 | tee install.log
@@ -2111,9 +2155,11 @@ runs:
             cp install.log "$DEBUG_ARTIFACTS_FOLDER/install.log"
             rsync -av --no-links --exclude='build' "$COMMON_KERNEL_FOLDER/out/install/lib/modules"/*/ "$DEBUG_ARTIFACTS_FOLDER"
           fi
-          cp "$COMMON_KERNEL_FOLDER/out/vmlinux" "$DEBUG_ARTIFACTS_FOLDER/vmlinux"
           cp "$COMMON_KERNEL_FOLDER/out/Module.symvers" "$DEBUG_ARTIFACTS_FOLDER/Module.symvers"
-          cp "$COMMON_KERNEL_FOLDER/out/System.map" "$DEBUG_ARTIFACTS_FOLDER/System.map"
+          if [ "$OP_MODEL" != "OP13" ] || [ "$OP_OS_VERSION" != "A16" ]; then
+            cp "$COMMON_KERNEL_FOLDER/out/vmlinux" "$DEBUG_ARTIFACTS_FOLDER/vmlinux"
+            cp "$COMMON_KERNEL_FOLDER/out/System.map" "$DEBUG_ARTIFACTS_FOLDER/System.map"
+          fi
           
           ls -la "$DEBUG_ARTIFACTS_FOLDER"
         else
