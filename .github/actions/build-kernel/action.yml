@@ -1991,6 +1991,16 @@ runs:
         echo "============================================"
         
         make LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" O="$OUT" gki_defconfig
+
+        if [ "$OP_MODEL" = "OP13" ] && [ "$OP_OS_VERSION" = "A16" ] && [ "${{ inputs.debug }}" = "true" ]; then
+          SUN_PERF_CONFIG="$COMMON_KERNEL_FOLDER/arch/arm64/configs/vendor/sun_perf.config"
+          if [ ! -f "$SUN_PERF_CONFIG" ]; then
+            echo "::error::OP13 A16 debug requires vendor config: $SUN_PERF_CONFIG"
+            exit 1
+          fi
+          echo "Merging OP13 A16 vendor/sun_perf.config for debug build"
+          "$COMMON_KERNEL_FOLDER/scripts/kconfig/merge_config.sh" -m -O "$OUT" "$OUT/.config" "$SUN_PERF_CONFIG"
+        fi
         
         LOCAL_LOCALVERSION="${CUSTOM_LOCALVERSION:--OP-WILD}"
         if [ -n "${LOCAL_LOCALVERSION:-}" ]; then
@@ -2027,6 +2037,17 @@ runs:
         
         
         make LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" O="$OUT" olddefconfig
+
+        if [ "$OP_MODEL" = "OP13" ] && [ "$OP_OS_VERSION" = "A16" ] && [ "${{ inputs.debug }}" = "true" ]; then
+          if ! grep -qx 'CONFIG_QCOM_SCM=m' "$OUT/.config"; then
+            echo "::error::CONFIG_QCOM_SCM is not enabled as a module after olddefconfig"
+            exit 1
+          fi
+          if ! grep -qx 'CONFIG_POWER_RESET_QCOM_DOWNLOAD_MODE=m' "$OUT/.config"; then
+            echo "::error::CONFIG_POWER_RESET_QCOM_DOWNLOAD_MODE is not enabled as a module after olddefconfig"
+            exit 1
+          fi
+        fi
         
         KCFLAGS="$KCFLAGS -Wno-error -pipe ${KCFLAGS_EXTRA}"
         KCPPFLAGS="$KCPPFLAGS -DCONFIG_OPTIMIZE_INLINING"
