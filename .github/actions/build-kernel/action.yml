@@ -1993,8 +1993,8 @@ runs:
         make LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" O="$OUT" gki_defconfig
 
         if [ "$OP_MODEL" = "OP13" ] && [ "$OP_OS_VERSION" = "A16" ] && [ "${{ inputs.debug }}" = "true" ]; then
-          echo "Enabling only CONFIG_QCOM_SCM=m for the OP13 A16 debug module build"
-          scripts/config --file "$OUT/.config" -m QCOM_SCM
+          echo "Enabling the minimal Kconfig selector for the OP13 A16 qcom-scm module build"
+          scripts/config --file "$OUT/.config" -m QCOM_SMEM -m QCOM_Q6V5_PAS
         fi
         
         LOCAL_LOCALVERSION="${CUSTOM_LOCALVERSION:--OP-WILD}"
@@ -2034,8 +2034,12 @@ runs:
         make LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" O="$OUT" olddefconfig
 
         if [ "$OP_MODEL" = "OP13" ] && [ "$OP_OS_VERSION" = "A16" ] && [ "${{ inputs.debug }}" = "true" ]; then
+          if ! grep -qx 'CONFIG_QCOM_Q6V5_PAS=m' "$OUT/.config"; then
+            echo "::error::CONFIG_QCOM_Q6V5_PAS is not enabled as a module after olddefconfig"
+            exit 1
+          fi
           if ! grep -qx 'CONFIG_QCOM_SCM=m' "$OUT/.config"; then
-            echo "::error::CONFIG_QCOM_SCM is not enabled as a module after olddefconfig"
+            echo "::error::CONFIG_QCOM_SCM is not selected as a module by CONFIG_QCOM_Q6V5_PAS"
             exit 1
           fi
         fi
