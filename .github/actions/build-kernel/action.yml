@@ -1993,13 +1993,8 @@ runs:
         make LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" O="$OUT" gki_defconfig
 
         if [ "$OP_MODEL" = "OP13" ] && [ "$OP_OS_VERSION" = "A16" ] && [ "${{ inputs.debug }}" = "true" ]; then
-          SUN_PERF_CONFIG="$COMMON_KERNEL_FOLDER/arch/arm64/configs/vendor/sun_perf.config"
-          if [ ! -f "$SUN_PERF_CONFIG" ]; then
-            echo "::error::OP13 A16 debug requires vendor config: $SUN_PERF_CONFIG"
-            exit 1
-          fi
-          echo "Merging OP13 A16 vendor/sun_perf.config for debug build"
-          "$COMMON_KERNEL_FOLDER/scripts/kconfig/merge_config.sh" -m -O "$OUT" "$OUT/.config" "$SUN_PERF_CONFIG"
+          echo "Enabling only CONFIG_QCOM_SCM=m for the OP13 A16 debug module build"
+          scripts/config --file "$OUT/.config" -m QCOM_SCM
         fi
         
         LOCAL_LOCALVERSION="${CUSTOM_LOCALVERSION:--OP-WILD}"
@@ -2043,10 +2038,6 @@ runs:
             echo "::error::CONFIG_QCOM_SCM is not enabled as a module after olddefconfig"
             exit 1
           fi
-          if ! grep -qx 'CONFIG_POWER_RESET_QCOM_DOWNLOAD_MODE=m' "$OUT/.config"; then
-            echo "::error::CONFIG_POWER_RESET_QCOM_DOWNLOAD_MODE is not enabled as a module after olddefconfig"
-            exit 1
-          fi
         fi
         
         KCFLAGS="$KCFLAGS -Wno-error -pipe ${KCFLAGS_EXTRA}"
@@ -2082,20 +2073,39 @@ runs:
         set -o pipefail
         
         if [ "${{ inputs.debug }}" == "true" ]; then
-          make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$OUT" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" Image modules 2>&1 | tee build.log
-          make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$COMMON_KERNEL_FOLDER/out" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" INSTALL_MOD_PATH="$COMMON_KERNEL_FOLDER/out/install" modules_install 2>&1 | tee install.log
-          
-          cp build.log "$DEBUG_ARTIFACTS_FOLDER/build.log"
-          cp install.log "$DEBUG_ARTIFACTS_FOLDER/install.log"
-          rsync -av --no-links --exclude='build' "$COMMON_KERNEL_FOLDER/out/install/lib/modules"/*/ "$DEBUG_ARTIFACTS_FOLDER"
           if [ "$OP_MODEL" = "OP13" ] && [ "$OP_OS_VERSION" = "A16" ]; then
-            QCOM_SCM_MODULE=$(find "$COMMON_KERNEL_FOLDER/out/install/lib/modules" -type f -name 'qcom-scm.ko' -print -quit)
-            if [ -z "$QCOM_SCM_MODULE" ]; then
-              echo "::error::qcom-scm.ko was not installed for the OP13 A16 debug build"
+            if ! make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$OUT" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" Image > build.log 2>&1; then
+              echo "::error::OP13 A16 kernel Image build failed; see build.log in the debug artifacts"
+              cp build.log "$DEBUG_ARTIFACTS_FOLDER/build.log"
+              tail -n 80 build.log
               exit 1
             fi
+            cp build.log "$DEBUG_ARTIFACTS_FOLDER/build.log"
+
+            if ! make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$OUT" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" drivers/firmware/qcom-scm.ko > qcom-scm-build.log 2>&1; then
+              echo "::error::Failed to build drivers/firmware/qcom-scm.ko; see qcom-scm-build.log in the debug artifacts"
+              cp qcom-scm-build.log "$DEBUG_ARTIFACTS_FOLDER/qcom-scm-build.log"
+              tail -n 80 qcom-scm-build.log
+              exit 1
+            fi
+            cp qcom-scm-build.log "$DEBUG_ARTIFACTS_FOLDER/qcom-scm-build.log"
+
+            QCOM_SCM_MODULE="$OUT/drivers/firmware/qcom-scm.ko"
+            if [ ! -s "$QCOM_SCM_MODULE" ]; then
+              echo "::error::Expected module was not produced: $QCOM_SCM_MODULE"
+              tail -n 80 qcom-scm-build.log
+              exit 1
+            fi
+
             cp "$QCOM_SCM_MODULE" "$DEBUG_ARTIFACTS_FOLDER/qcom-scm.ko"
-            echo "✅ qcom-scm.ko copied to the root of the debug artifacts"
+            echo "✅ Built only qcom-scm.ko for the OP13 A16 debug module artifact"
+          else
+            make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$OUT" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" Image modules 2>&1 | tee build.log
+            make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$COMMON_KERNEL_FOLDER/out" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" INSTALL_MOD_PATH="$COMMON_KERNEL_FOLDER/out/install" modules_install 2>&1 | tee install.log
+
+            cp build.log "$DEBUG_ARTIFACTS_FOLDER/build.log"
+            cp install.log "$DEBUG_ARTIFACTS_FOLDER/install.log"
+            rsync -av --no-links --exclude='build' "$COMMON_KERNEL_FOLDER/out/install/lib/modules"/*/ "$DEBUG_ARTIFACTS_FOLDER"
           fi
           cp "$COMMON_KERNEL_FOLDER/out/vmlinux" "$DEBUG_ARTIFACTS_FOLDER/vmlinux"
           cp "$COMMON_KERNEL_FOLDER/out/Module.symvers" "$DEBUG_ARTIFACTS_FOLDER/Module.symvers"
@@ -2476,10 +2486,10 @@ runs:
         retention-days: 90
 
     - name: Upload OP13 A16 qcom-scm module
-      if: ${{ success() && inputs.debug == 'true' && env.OP_MODEL == 'OP13' && env.OP_OS_VERSION == 'A16' }}
+      if: ${{ always() && !cancelled() && inputs.debug == 'true' && env.OP_MODEL == 'OP13' && env.OP_OS_VERSION == 'A16' && steps.build_kernel_step.conclusion == 'success' }}
       uses: actions/upload-artifact@v7
       with:
-        name: qcom-scm-${{ env.ZIP_NAME }}
+        name: qcom-scm-${{ env.OP_MODEL }}-${{ env.OP_OS_VERSION }}-${{ env.KERNEL_FULL_VER }}
         path: ${{ env.DEBUG_ARTIFACTS_FOLDER }}/qcom-scm.ko
         archive: false
         retention-days: 90
