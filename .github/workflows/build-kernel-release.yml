@@ -29,6 +29,11 @@ on:
           - android13-5.15
           - android12-5.10
         default: A14+15+16
+      op13_a16_only:
+        description: 'Build only configs/a16/OP13.json (overrides the model selection above)'
+        required: true
+        type: boolean
+        default: true
       ksu_options:
         description: 'Enter KernelSU build json'
         required: true
@@ -169,6 +174,11 @@ jobs:
               jq_filter="map(select(false))"
               ;;
           esac
+
+          if [ "${{ inputs.op13_a16_only }}" = "true" ]; then
+            jq_filter='map(select(.model == "OP13" and .os_version == "A16" and .android_version == "android15" and .kernel_version == "6.6"))'
+            echo "🔒 OP13 A16 only: all other model configurations are disabled for this run"
+          fi
           
           filtered=$(jq -c "$jq_filter" matrix.json)
           count=$(jq 'length' <<<"$filtered")
@@ -180,8 +190,12 @@ jobs:
             )
           ')
           
-          if [ "$count" -eq 0 ]; then
-            echo "::error::No config files found for input '$input' after applying filters!"
+          if [ "$count" -eq 0 ] || { [ "${{ inputs.op13_a16_only }}" = "true" ] && [ "$count" -ne 1 ]; }; then
+            if [ "${{ inputs.op13_a16_only }}" = "true" ]; then
+              echo "::error::Expected exactly one OP13 A16 config, found $count"
+            else
+              echo "::error::No config files found for input '$input' after applying filters!"
+            fi
             echo ""
             echo "Available configurations:"
             jq -r '.[] | "  - \(.model) (\(.os_version), \(.android_version)-\(.kernel_version))"' matrix.json
@@ -469,7 +483,7 @@ jobs:
             cat << 'EOF'
           ## 🎯 Build Plan
           
-          **Target:** ${{ inputs.op_model }}  
+          **Target:** ${{ inputs.op13_a16_only && 'OP13 A16 only' || inputs.op_model }}
           **Devices:** ${{ steps.set-matrix.outputs.count }}  
           
           **Configuration:**
@@ -530,7 +544,7 @@ jobs:
           echo "> **💡 Note:** Hashes are resolved at run time via API calls before builds start." >> $GITHUB_STEP_SUMMARY
           
           # Add A restriction note for android-kernel filters
-          if [[ "${{ inputs.op_model }}" == android*-*.* ]]; then
+          if [[ "${{ inputs.op13_a16_only }}" != "true" && "${{ inputs.op_model }}" == android*-*.* ]]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "> **⚠️ Android-Kernel Filter:** Only A15 and A16 devices will be built for \`${{ inputs.op_model }}\`" >> $GITHUB_STEP_SUMMARY
           fi
