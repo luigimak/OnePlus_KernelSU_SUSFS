@@ -38,7 +38,7 @@ on:
         description: 'Enter KernelSU build json'
         required: true
         type: string
-        default: '[{"type":"ksun","hash":"dev"}]'
+        default: '[{"type":"ksun","hash":"9124eb15ea6691b818fb12ee28fc96fc4926afb3"}]'
       optimize_level:
         description: "Compiler optimization level"
         required: true
@@ -53,7 +53,7 @@ on:
         description: 'Enable debug mode: dumping debug related artifacts and show some debug logs'
         required: false
         type: boolean
-        default: false
+        default: true
       mirror_toolchains:
         description: 'Do you want to sync toolchains before build? [99% runs not required]'
         required: false

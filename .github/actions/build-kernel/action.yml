@@ -1992,11 +1992,6 @@ runs:
         
         make LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" O="$OUT" gki_defconfig
 
-        if [ "$OP_MODEL" = "OP13" ] && [ "$OP_OS_VERSION" = "A16" ] && [ "${{ inputs.debug }}" = "true" ]; then
-          echo "Enabling the minimal Kconfig selector for the OP13 A16 qcom-scm module build"
-          scripts/config --file "$OUT/.config" -m QCOM_SMEM -m QCOM_Q6V5_PAS
-        fi
-        
         LOCAL_LOCALVERSION="${CUSTOM_LOCALVERSION:--OP-WILD}"
         if [ -n "${LOCAL_LOCALVERSION:-}" ]; then
           scripts/config --file "$OUT/.config" --set-str LOCALVERSION "${LOCAL_LOCALVERSION}"
@@ -2033,17 +2028,6 @@ runs:
         
         make LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" O="$OUT" olddefconfig
 
-        if [ "$OP_MODEL" = "OP13" ] && [ "$OP_OS_VERSION" = "A16" ] && [ "${{ inputs.debug }}" = "true" ]; then
-          if ! grep -qx 'CONFIG_QCOM_Q6V5_PAS=m' "$OUT/.config"; then
-            echo "::error::CONFIG_QCOM_Q6V5_PAS is not enabled as a module after olddefconfig"
-            exit 1
-          fi
-          if ! grep -qx 'CONFIG_QCOM_SCM=m' "$OUT/.config"; then
-            echo "::error::CONFIG_QCOM_SCM is not selected as a module by CONFIG_QCOM_Q6V5_PAS"
-            exit 1
-          fi
-        fi
-        
         KCFLAGS="$KCFLAGS -Wno-error -pipe ${KCFLAGS_EXTRA}"
         KCPPFLAGS="$KCPPFLAGS -DCONFIG_OPTIMIZE_INLINING"
         
@@ -2117,16 +2101,14 @@ runs:
 
             MSM_OUT="$MSM_KERNEL_FOLDER/out"
             mkdir -p "$MSM_OUT"
-            cp "$OUT/.config" "$MSM_OUT/.config"
-            "$MSM_KERNEL_FOLDER/scripts/config" --file "$MSM_OUT/.config" -m QCOM_SMEM -m QCOM_Q6V5_PAS
             : > "$MSM_KERNEL_FOLDER/.scmversion"
-            if ! make -C "$MSM_KERNEL_FOLDER" LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" O="$MSM_OUT" olddefconfig; then
-              echo "::error::Failed to configure the OP13 A16 MSM kernel tree for qcom-scm"
+            if ! make -C "$MSM_KERNEL_FOLDER" LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" O="$MSM_OUT" gki_defconfig vendor/sun_perf.config; then
+              echo "::error::Failed to configure the OP13 A16 MSM kernel tree with gki_defconfig and sun_perf.config"
               exit 1
             fi
 
-            if ! grep -qx 'CONFIG_QCOM_Q6V5_PAS=m' "$MSM_OUT/.config" || ! grep -qx 'CONFIG_QCOM_SCM=m' "$MSM_OUT/.config"; then
-              echo "::error::The MSM kernel config did not retain QCOM_Q6V5_PAS=m and QCOM_SCM=m after olddefconfig"
+            if ! grep -qx 'CONFIG_QCOM_SCM=m' "$MSM_OUT/.config"; then
+              echo "::error::CONFIG_QCOM_SCM=m is missing after applying the MSM sun_perf.config"
               exit 1
             fi
 
@@ -2155,8 +2137,8 @@ runs:
             cp install.log "$DEBUG_ARTIFACTS_FOLDER/install.log"
             rsync -av --no-links --exclude='build' "$COMMON_KERNEL_FOLDER/out/install/lib/modules"/*/ "$DEBUG_ARTIFACTS_FOLDER"
           fi
-          cp "$COMMON_KERNEL_FOLDER/out/Module.symvers" "$DEBUG_ARTIFACTS_FOLDER/Module.symvers"
           if [ "$OP_MODEL" != "OP13" ] || [ "$OP_OS_VERSION" != "A16" ]; then
+            cp "$COMMON_KERNEL_FOLDER/out/Module.symvers" "$DEBUG_ARTIFACTS_FOLDER/Module.symvers"
             cp "$COMMON_KERNEL_FOLDER/out/vmlinux" "$DEBUG_ARTIFACTS_FOLDER/vmlinux"
             cp "$COMMON_KERNEL_FOLDER/out/System.map" "$DEBUG_ARTIFACTS_FOLDER/System.map"
           fi
