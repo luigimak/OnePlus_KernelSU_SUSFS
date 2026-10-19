@@ -2112,8 +2112,13 @@ runs:
               exit 1
             fi
 
-            if ! make -C "$MSM_KERNEL_FOLDER" V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$MSM_OUT" KBUILD_MIXED_TREE="$DIST_DIR" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" drivers/firmware/qcom-scm.ko > qcom-scm-build.log 2>&1; then
-              echo "::error::Failed to build drivers/firmware/qcom-scm.ko from msm-kernel; see qcom-scm-build.log in the debug artifacts"
+            if ! grep -qx 'CONFIG_GH_RM_DRV=m' "$MSM_OUT/.config"; then
+              echo "::error::CONFIG_GH_RM_DRV=m is missing; qcom-scm requires Gunyah RM symbols in the MSM module build"
+              exit 1
+            fi
+
+            if ! make -C "$MSM_KERNEL_FOLDER" V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$MSM_OUT" KBUILD_MIXED_TREE="$DIST_DIR" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" drivers/firmware/qcom-scm.ko drivers/virt/gunyah/gh_rm_drv.ko > qcom-scm-build.log 2>&1; then
+              echo "::error::Failed to build qcom-scm.ko and its Gunyah RM symbol provider from msm-kernel; see qcom-scm-build.log in the debug artifacts"
               cp qcom-scm-build.log "$DEBUG_ARTIFACTS_FOLDER/qcom-scm-build.log"
               tail -n 80 qcom-scm-build.log
               exit 1
@@ -2127,8 +2132,16 @@ runs:
               exit 1
             fi
 
+            GH_RM_MODULE="$MSM_OUT/drivers/virt/gunyah/gh_rm_drv.ko"
+            if [ ! -s "$GH_RM_MODULE" ]; then
+              echo "::error::Expected Gunyah RM dependency module was not produced: $GH_RM_MODULE"
+              tail -n 80 qcom-scm-build.log
+              exit 1
+            fi
+
             cp "$QCOM_SCM_MODULE" "$DEBUG_ARTIFACTS_FOLDER/qcom-scm.ko"
-            echo "✅ Built qcom-scm.ko from msm-kernel against the common kernel mixed-tree artifacts"
+            cp "$GH_RM_MODULE" "$DEBUG_ARTIFACTS_FOLDER/gh_rm_drv.ko"
+            echo "✅ Built qcom-scm.ko and its gh_rm_drv.ko symbol provider from msm-kernel against the common kernel mixed-tree artifacts"
           else
             make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$OUT" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" Image modules 2>&1 | tee build.log
             make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$COMMON_KERNEL_FOLDER/out" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" INSTALL_MOD_PATH="$COMMON_KERNEL_FOLDER/out/install" modules_install 2>&1 | tee install.log
