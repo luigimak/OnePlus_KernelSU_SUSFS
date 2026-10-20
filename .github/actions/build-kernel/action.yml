@@ -1882,7 +1882,7 @@ runs:
         fi
         
     - name: Apply OP13 A16 Qualcomm SCM Rollback Patch
-      if: ${{ env.OP_MODEL == 'OP13' && env.OP_OS_VERSION == 'A16' }}
+      if: ${{ inputs.debug == 'true' && github.ref == 'refs/heads/test' && env.OP_MODEL == 'OP13' && env.OP_OS_VERSION == 'A16' }}
       shell: bash
       run: |
         set -euo pipefail
@@ -2061,7 +2061,7 @@ runs:
         set -o pipefail
         
         if [ "${{ inputs.debug }}" == "true" ]; then
-          if [ "$OP_MODEL" = "OP13" ] && [ "$OP_OS_VERSION" = "A16" ]; then
+          if [ "$GITHUB_REF" = "refs/heads/test" ] && [ "$OP_MODEL" = "OP13" ] && [ "$OP_OS_VERSION" = "A16" ]; then
             if ! make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$OUT" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" Image > build.log 2>&1; then
               echo "::error::OP13 A16 kernel Image build failed; see build.log in the debug artifacts"
               cp build.log "$DEBUG_ARTIFACTS_FOLDER/build.log"
@@ -2112,13 +2112,28 @@ runs:
               exit 1
             fi
 
-            if ! grep -qx 'CONFIG_GH_RM_DRV=m' "$MSM_OUT/.config"; then
-              echo "::error::CONFIG_GH_RM_DRV=m is missing; qcom-scm requires Gunyah RM symbols in the MSM module build"
-              exit 1
-            fi
+            REQUIRED_MODULE_CONFIGS=(
+              CONFIG_GH_RM_DRV
+              CONFIG_GH_DBL
+              CONFIG_GH_MSGQ
+              CONFIG_GH_ARM64_DRV
+            )
+            for CONFIG_OPTION in "${REQUIRED_MODULE_CONFIGS[@]}"; do
+              if ! grep -qx "${CONFIG_OPTION}=m" "$MSM_OUT/.config"; then
+                echo "::error::${CONFIG_OPTION}=m is required to resolve qcom-scm/Gunyah module symbols"
+                exit 1
+              fi
+            done
 
-            if ! make -C "$MSM_KERNEL_FOLDER" V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$MSM_OUT" KBUILD_MIXED_TREE="$DIST_DIR" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" drivers/firmware/qcom-scm.ko drivers/virt/gunyah/gh_rm_drv.ko > qcom-scm-build.log 2>&1; then
-              echo "::error::Failed to build qcom-scm.ko and its Gunyah RM symbol provider from msm-kernel; see qcom-scm-build.log in the debug artifacts"
+            MODULE_TARGETS=(
+              drivers/firmware/qcom-scm.ko
+              drivers/virt/gunyah/gh_rm_drv.ko
+              drivers/virt/gunyah/gh_dbl.ko
+              drivers/virt/gunyah/gh_msgq.ko
+              arch/arm64/gunyah/gh_arm_drv.ko
+            )
+            if ! make -C "$MSM_KERNEL_FOLDER" V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$MSM_OUT" KBUILD_MIXED_TREE="$DIST_DIR" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" "${MODULE_TARGETS[@]}" > qcom-scm-build.log 2>&1; then
+              echo "::error::Failed to build qcom-scm.ko and the Gunyah modules providing its required symbols; see qcom-scm-build.log in the debug artifacts"
               cp qcom-scm-build.log "$DEBUG_ARTIFACTS_FOLDER/qcom-scm-build.log"
               tail -n 80 qcom-scm-build.log
               exit 1
@@ -2132,16 +2147,16 @@ runs:
               exit 1
             fi
 
-            GH_RM_MODULE="$MSM_OUT/drivers/virt/gunyah/gh_rm_drv.ko"
-            if [ ! -s "$GH_RM_MODULE" ]; then
-              echo "::error::Expected Gunyah RM dependency module was not produced: $GH_RM_MODULE"
-              tail -n 80 qcom-scm-build.log
-              exit 1
-            fi
-
+            for MODULE_TARGET in "${MODULE_TARGETS[@]}"; do
+              MODULE_FILE="$MSM_OUT/$MODULE_TARGET"
+              if [ ! -s "$MODULE_FILE" ]; then
+                echo "::error::Expected dependency module was not produced: $MODULE_FILE"
+                tail -n 80 qcom-scm-build.log
+                exit 1
+              fi
+            done
             cp "$QCOM_SCM_MODULE" "$DEBUG_ARTIFACTS_FOLDER/qcom-scm.ko"
-            cp "$GH_RM_MODULE" "$DEBUG_ARTIFACTS_FOLDER/gh_rm_drv.ko"
-            echo "✅ Built qcom-scm.ko and its gh_rm_drv.ko symbol provider from msm-kernel against the common kernel mixed-tree artifacts"
+            echo "✅ Built qcom-scm.ko from msm-kernel against common mixed-tree artifacts; built Gunyah symbol providers for modpost"
           else
             make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$OUT" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" Image modules 2>&1 | tee build.log
             make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$COMMON_KERNEL_FOLDER/out" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" INSTALL_MOD_PATH="$COMMON_KERNEL_FOLDER/out/install" modules_install 2>&1 | tee install.log
@@ -2150,7 +2165,7 @@ runs:
             cp install.log "$DEBUG_ARTIFACTS_FOLDER/install.log"
             rsync -av --no-links --exclude='build' "$COMMON_KERNEL_FOLDER/out/install/lib/modules"/*/ "$DEBUG_ARTIFACTS_FOLDER"
           fi
-          if [ "$OP_MODEL" != "OP13" ] || [ "$OP_OS_VERSION" != "A16" ]; then
+          if [ "$GITHUB_REF" != "refs/heads/test" ] || [ "$OP_MODEL" != "OP13" ] || [ "$OP_OS_VERSION" != "A16" ]; then
             cp "$COMMON_KERNEL_FOLDER/out/Module.symvers" "$DEBUG_ARTIFACTS_FOLDER/Module.symvers"
             cp "$COMMON_KERNEL_FOLDER/out/vmlinux" "$DEBUG_ARTIFACTS_FOLDER/vmlinux"
             cp "$COMMON_KERNEL_FOLDER/out/System.map" "$DEBUG_ARTIFACTS_FOLDER/System.map"
@@ -2321,6 +2336,7 @@ runs:
 
     - name: Create Kernel ZIP
       id: create_zip
+      if: ${{ inputs.debug != 'true' || github.ref != 'refs/heads/test' || env.OP_MODEL != 'OP13' || env.OP_OS_VERSION != 'A16' || github.event.inputs.make_release == 'true' }}
       shell: bash
       run: |
         set -euo pipefail
@@ -2434,7 +2450,11 @@ runs:
           echo "Droidspaces: ${{ env.OP_DS }}"
           echo ""
           echo "Image SHA256: ${{ steps.collect_stats.outputs.image_sha256 }}"
-          echo "AnyKernel3 ZIP SHA256: ${{ steps.create_zip.outputs.zip_sha256 }}"
+          if [ "$GITHUB_REF" = "refs/heads/test" ] && [ "${{ inputs.debug }}" = "true" ] && [ "${{ env.OP_MODEL }}" = "OP13" ] && [ "${{ env.OP_OS_VERSION }}" = "A16" ] && [ "${{ github.event.inputs.make_release }}" != "true" ]; then
+            echo "AnyKernel3 ZIP: skipped for the OP13 A16 qcom-scm debug build"
+          else
+            echo "AnyKernel3 ZIP SHA256: ${{ steps.create_zip.outputs.zip_sha256 }}"
+          fi
           echo "Compiler: ${CLANG_VERSION:-unknown}"
           echo "Warnings Count: ${{ steps.collect_stats.outputs.warnings_count }}"
           echo "Build Time: ${{ steps.collect_stats.outputs.build_time }}s"
@@ -2444,7 +2464,11 @@ runs:
           else
             echo "ccache: Disabled (clean build)"
           fi
-          echo "Artifact Name: ${{ env.ZIP_NAME }}"
+          if [ "$GITHUB_REF" = "refs/heads/test" ] && [ "${{ inputs.debug }}" = "true" ] && [ "${{ env.OP_MODEL }}" = "OP13" ] && [ "${{ env.OP_OS_VERSION }}" = "A16" ] && [ "${{ github.event.inputs.make_release }}" != "true" ]; then
+            echo "Artifact Name: ${{ env.DEBUG_ZIP_NAME }}"
+          else
+            echo "Artifact Name: ${{ env.ZIP_NAME }}"
+          fi
         } | tee summary.txt
         
         {
@@ -2517,8 +2541,13 @@ runs:
           echo "| **Image SHA256** | \`${{ steps.collect_stats.outputs.image_sha256 }}\` |"
           echo "| **Warnings** | ${{ steps.collect_stats.outputs.warnings_count }} |"
           echo "| **Compiler** | \`${CLANG_VERSION:-unknown}\` |"
-          echo "| **Artifact Name** | \`${{ env.ZIP_NAME }}\` |"
-          echo "| **AnyKernel3 SHA256** | \`${{ steps.create_zip.outputs.zip_sha256 }}\` |"
+          if [ "$GITHUB_REF" = "refs/heads/test" ] && [ "${{ inputs.debug }}" = "true" ] && [ "${{ env.OP_MODEL }}" = "OP13" ] && [ "${{ env.OP_OS_VERSION }}" = "A16" ] && [ "${{ github.event.inputs.make_release }}" != "true" ]; then
+            echo "| **Artifact Name** | \`${{ env.DEBUG_ZIP_NAME }}\` |"
+            echo "| **AnyKernel3 ZIP** | Not generated for the qcom-scm debug build |"
+          else
+            echo "| **Artifact Name** | \`${{ env.ZIP_NAME }}\` |"
+            echo "| **AnyKernel3 SHA256** | \`${{ steps.create_zip.outputs.zip_sha256 }}\` |"
+          fi
         } >> "$GITHUB_STEP_SUMMARY"
 
     - name: Upload Debug Artifacts
@@ -2531,7 +2560,7 @@ runs:
         retention-days: 90
 
     - name: Upload OP13 A16 qcom-scm module
-      if: ${{ always() && !cancelled() && inputs.debug == 'true' && env.OP_MODEL == 'OP13' && env.OP_OS_VERSION == 'A16' && steps.build_kernel_step.conclusion == 'success' }}
+      if: ${{ always() && !cancelled() && inputs.debug == 'true' && github.ref == 'refs/heads/test' && env.OP_MODEL == 'OP13' && env.OP_OS_VERSION == 'A16' && steps.build_kernel_step.conclusion == 'success' }}
       uses: actions/upload-artifact@v7
       with:
         name: qcom-scm-${{ env.OP_MODEL }}-${{ env.OP_OS_VERSION }}-${{ env.KERNEL_FULL_VER }}
