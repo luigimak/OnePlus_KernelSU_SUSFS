@@ -1979,19 +1979,26 @@ runs:
         mkdir -p "$OUT"
 
         if [ "$GITHUB_REF" = "refs/heads/test" ] && [ "$OP_MODEL" = "OP13" ] && [ "$OP_OS_VERSION" = "A16" ] && [ "${{ inputs.debug }}" = "true" ]; then
-          python3 - "$COMMON_KERNEL_FOLDER/tools/lib/bpf/libbpf.c" <<'PY'
+          python3 \
+            "$COMMON_KERNEL_FOLDER/tools/lib/bpf/libbpf.c" \
+            "$MSM_KERNEL_FOLDER/tools/lib/bpf/libbpf.c" <<'PY'
         from pathlib import Path
         import sys
 
-        source = Path(sys.argv[1])
-        text = source.read_text()
         old = "\t\t\tchar *next_path;"
         new = "\t\t\tconst char *next_path;"
-        if text.count(old) != 1:
-            raise SystemExit(f"Expected exactly one libbpf next_path declaration in {source}")
-        source.write_text(text.replace(old, new, 1))
+        replacements = []
+        for source_name in sys.argv[1:]:
+            source = Path(source_name)
+            text = source.read_text()
+            if text.count(old) != 1:
+                raise SystemExit(f"Expected exactly one libbpf next_path declaration in {source}")
+            replacements.append((source, text.replace(old, new, 1)))
+
+        for source, text in replacements:
+            source.write_text(text)
+            print(f"Applied const-correct next_path declaration in {source}")
         PY
-          echo "Applied const-correct libbpf fix for the runner Clang host-tool build"
         fi
 
         echo "============================================"
