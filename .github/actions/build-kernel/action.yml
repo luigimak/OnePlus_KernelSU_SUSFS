@@ -1979,7 +1979,7 @@ runs:
         mkdir -p "$OUT"
 
         if [ "$GITHUB_REF" = "refs/heads/test" ] && [ "$OP_MODEL" = "OP13" ] && [ "$OP_OS_VERSION" = "A16" ] && [ "${{ inputs.debug }}" = "true" ]; then
-          python3 \
+          python3 - \
             "$COMMON_KERNEL_FOLDER/tools/lib/bpf/libbpf.c" \
             "$MSM_KERNEL_FOLDER/tools/lib/bpf/libbpf.c" <<'PY'
         from pathlib import Path
