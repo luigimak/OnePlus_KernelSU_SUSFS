@@ -1882,12 +1882,12 @@ runs:
         fi
         
     - name: Apply OP13 A16 Qualcomm SCM Rollback Patch
-      if: ${{ env.OP_MODEL == 'OP13' && env.OP_OS_VERSION == 'A16' }}
+      if: ${{ inputs.debug == 'true' && github.ref == 'refs/heads/qcom' && env.OP_MODEL == 'OP13' && env.OP_OS_VERSION == 'A16' }}
       shell: bash
       run: |
         set -euo pipefail
         echo "::group::Apply OP13 A16 Qualcomm SCM rollback patch"
-        cd "$COMMON_KERNEL_FOLDER"
+        cd "$MSM_KERNEL_FOLDER"
         patch_file=$(mktemp)
         trap 'rm -f "$patch_file"' EXIT
         curl -fL --retry 3 --retry-delay 5 \
@@ -1935,8 +1935,16 @@ runs:
         source "$KERNEL_PLATFORM_FOLDER/build/kernel/_setup_env.sh" 2>/dev/null || true
         set -u
         
-        echo '#!/bin/bash' > "$COMMON_KERNEL_FOLDER/ld-wrapper"
-        echo 'ld.lld "$@" --thinlto-jobs=$(nproc --all)' >> "$COMMON_KERNEL_FOLDER/ld-wrapper"
+        LD_LLD_BIN="ld.lld"
+        if [ "$GITHUB_REF" = "refs/heads/qcom" ] && [ "$OP_MODEL" = "OP13" ] && [ "$OP_OS_VERSION" = "A16" ] && [ "${{ inputs.debug }}" = "true" ]; then
+          LD_LLD_BIN="/usr/bin/ld.lld"
+          if [ ! -x "$LD_LLD_BIN" ]; then
+            echo "::error::System LLD linker not found at $LD_LLD_BIN"
+            exit 1
+          fi
+          echo "Using runner-provided LLD for OP13 A16 debug build: $("$LD_LLD_BIN" --version | head -n1)"
+        fi
+        printf '#!/bin/bash\nexec "%s" "$@" --thinlto-jobs=$(nproc --all)\n' "$LD_LLD_BIN" > "$COMMON_KERNEL_FOLDER/ld-wrapper"
         chmod +x "$COMMON_KERNEL_FOLDER/ld-wrapper"
         
         KERNEL_BUILD_DATE=$(date -u)
@@ -1970,6 +1978,29 @@ runs:
         OUT=out
         mkdir -p "$OUT"
 
+        if [ "$GITHUB_REF" = "refs/heads/qcom" ] && [ "$OP_MODEL" = "OP13" ] && [ "$OP_OS_VERSION" = "A16" ] && [ "${{ inputs.debug }}" = "true" ]; then
+          python3 - \
+            "$COMMON_KERNEL_FOLDER/tools/lib/bpf/libbpf.c" \
+            "$MSM_KERNEL_FOLDER/tools/lib/bpf/libbpf.c" <<'PY'
+        from pathlib import Path
+        import sys
+
+        old = "\t\t\tchar *next_path;"
+        new = "\t\t\tconst char *next_path;"
+        replacements = []
+        for source_name in sys.argv[1:]:
+            source = Path(source_name)
+            text = source.read_text()
+            if text.count(old) != 1:
+                raise SystemExit(f"Expected exactly one libbpf next_path declaration in {source}")
+            replacements.append((source, text.replace(old, new, 1)))
+
+        for source, text in replacements:
+            source.write_text(text)
+            print(f"Applied const-correct next_path declaration in {source}")
+        PY
+        fi
+
         echo "============================================"
         echo "🔍 Compiler & ccache Verification"
         echo "============================================"
@@ -1991,7 +2022,7 @@ runs:
         echo "============================================"
         
         make LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" O="$OUT" gki_defconfig
-        
+
         LOCAL_LOCALVERSION="${CUSTOM_LOCALVERSION:--OP-WILD}"
         if [ -n "${LOCAL_LOCALVERSION:-}" ]; then
           scripts/config --file "$OUT/.config" --set-str LOCALVERSION "${LOCAL_LOCALVERSION}"
@@ -2027,7 +2058,7 @@ runs:
         
         
         make LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" O="$OUT" olddefconfig
-        
+
         KCFLAGS="$KCFLAGS -Wno-error -pipe ${KCFLAGS_EXTRA}"
         KCPPFLAGS="$KCPPFLAGS -DCONFIG_OPTIMIZE_INLINING"
         
@@ -2061,15 +2092,115 @@ runs:
         set -o pipefail
         
         if [ "${{ inputs.debug }}" == "true" ]; then
-          make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$OUT" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" Image modules 2>&1 | tee build.log
-          make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$COMMON_KERNEL_FOLDER/out" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" INSTALL_MOD_PATH="$COMMON_KERNEL_FOLDER/out/install" modules_install 2>&1 | tee install.log
-          
-          cp build.log "$DEBUG_ARTIFACTS_FOLDER/build.log"
-          cp install.log "$DEBUG_ARTIFACTS_FOLDER/install.log"
-          rsync -av --no-links --exclude='build' "$COMMON_KERNEL_FOLDER/out/install/lib/modules"/*/ "$DEBUG_ARTIFACTS_FOLDER"
-          cp "$COMMON_KERNEL_FOLDER/out/vmlinux" "$DEBUG_ARTIFACTS_FOLDER/vmlinux"
-          cp "$COMMON_KERNEL_FOLDER/out/Module.symvers" "$DEBUG_ARTIFACTS_FOLDER/Module.symvers"
-          cp "$COMMON_KERNEL_FOLDER/out/System.map" "$DEBUG_ARTIFACTS_FOLDER/System.map"
+          if [ "$GITHUB_REF" = "refs/heads/qcom" ] && [ "$OP_MODEL" = "OP13" ] && [ "$OP_OS_VERSION" = "A16" ]; then
+            if ! make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$OUT" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" Image > build.log 2>&1; then
+              echo "::error::OP13 A16 kernel Image build failed; see build.log in the debug artifacts"
+              cp build.log "$DEBUG_ARTIFACTS_FOLDER/build.log"
+              tail -n 80 build.log
+              exit 1
+            fi
+            cp build.log "$DEBUG_ARTIFACTS_FOLDER/build.log"
+
+            DIST_DIR="$DEBUG_ARTIFACTS_FOLDER"
+            mkdir -p "$DIST_DIR"
+            FILES=(
+              arch/arm64/boot/Image
+              arch/arm64/boot/Image.gz
+              arch/arm64/boot/Image.lz4
+              vmlinux
+              vmlinux.symvers
+              System.map
+              modules.builtin
+              modules.builtin.modinfo
+            )
+
+            echo "Copying common kernel artifacts to mixed-tree directory: $DIST_DIR"
+            for FILE in "${FILES[@]}"; do
+              if [ -f "$OUT/$FILE" ]; then
+                cp -p "$OUT/$FILE" "$DIST_DIR/"
+              else
+                echo "::warning::Mixed-tree artifact not found in $OUT: $FILE"
+              fi
+            done
+
+            for REQUIRED_FILE in vmlinux.symvers System.map; do
+              if [ ! -s "$DIST_DIR/$REQUIRED_FILE" ]; then
+                echo "::error::Required mixed-tree artifact is missing: $DIST_DIR/$REQUIRED_FILE"
+                exit 1
+              fi
+            done
+
+            MSM_OUT="$MSM_KERNEL_FOLDER/out"
+            mkdir -p "$MSM_OUT"
+            : > "$MSM_KERNEL_FOLDER/.scmversion"
+            if ! make -C "$MSM_KERNEL_FOLDER" LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" O="$MSM_OUT" gki_defconfig vendor/sun_perf.config; then
+              echo "::error::Failed to configure the OP13 A16 MSM kernel tree with gki_defconfig and sun_perf.config"
+              exit 1
+            fi
+
+            if ! grep -qx 'CONFIG_QCOM_SCM=m' "$MSM_OUT/.config"; then
+              echo "::error::CONFIG_QCOM_SCM=m is missing after applying the MSM sun_perf.config"
+              exit 1
+            fi
+
+            REQUIRED_MODULE_CONFIGS=(
+              CONFIG_GH_RM_DRV
+              CONFIG_GH_DBL
+              CONFIG_GH_MSGQ
+              CONFIG_GH_ARM64_DRV
+            )
+            for CONFIG_OPTION in "${REQUIRED_MODULE_CONFIGS[@]}"; do
+              if ! grep -qx "${CONFIG_OPTION}=m" "$MSM_OUT/.config"; then
+                echo "::error::${CONFIG_OPTION}=m is required to resolve qcom-scm/Gunyah module symbols"
+                exit 1
+              fi
+            done
+
+            MODULE_TARGETS=(
+              drivers/firmware/qcom-scm.ko
+              drivers/virt/gunyah/gh_rm_drv.ko
+              drivers/virt/gunyah/gh_dbl.ko
+              drivers/virt/gunyah/gh_msgq.ko
+              arch/arm64/gunyah/gh_arm_drv.ko
+            )
+            if ! make -C "$MSM_KERNEL_FOLDER" V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$MSM_OUT" KBUILD_MIXED_TREE="$DIST_DIR" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" "${MODULE_TARGETS[@]}" > qcom-scm-build.log 2>&1; then
+              echo "::error::Failed to build qcom-scm.ko and the Gunyah modules providing its required symbols; see qcom-scm-build.log in the debug artifacts"
+              cp qcom-scm-build.log "$DEBUG_ARTIFACTS_FOLDER/qcom-scm-build.log"
+              tail -n 80 qcom-scm-build.log
+              exit 1
+            fi
+            cp qcom-scm-build.log "$DEBUG_ARTIFACTS_FOLDER/qcom-scm-build.log"
+
+            QCOM_SCM_MODULE="$MSM_OUT/drivers/firmware/qcom-scm.ko"
+            if [ ! -s "$QCOM_SCM_MODULE" ]; then
+              echo "::error::Expected module was not produced: $QCOM_SCM_MODULE"
+              tail -n 80 qcom-scm-build.log
+              exit 1
+            fi
+
+            for MODULE_TARGET in "${MODULE_TARGETS[@]}"; do
+              MODULE_FILE="$MSM_OUT/$MODULE_TARGET"
+              if [ ! -s "$MODULE_FILE" ]; then
+                echo "::error::Expected dependency module was not produced: $MODULE_FILE"
+                tail -n 80 qcom-scm-build.log
+                exit 1
+              fi
+            done
+            cp "$QCOM_SCM_MODULE" "$DEBUG_ARTIFACTS_FOLDER/qcom-scm.ko"
+            echo "✅ Built qcom-scm.ko from msm-kernel against common mixed-tree artifacts; built Gunyah symbol providers for modpost"
+          else
+            make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$OUT" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" Image modules 2>&1 | tee build.log
+            make V=1 LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" -j"$(nproc --all)" O="$COMMON_KERNEL_FOLDER/out" KCFLAGS="$KCFLAGS" KCPPFLAGS="$KCPPFLAGS" CONFIG_FAKE_DISABLE="$CONFIG_FAKE_DISABLE" INSTALL_MOD_PATH="$COMMON_KERNEL_FOLDER/out/install" modules_install 2>&1 | tee install.log
+
+            cp build.log "$DEBUG_ARTIFACTS_FOLDER/build.log"
+            cp install.log "$DEBUG_ARTIFACTS_FOLDER/install.log"
+            rsync -av --no-links --exclude='build' "$COMMON_KERNEL_FOLDER/out/install/lib/modules"/*/ "$DEBUG_ARTIFACTS_FOLDER"
+          fi
+          if [ "$GITHUB_REF" != "refs/heads/qcom" ] || [ "$OP_MODEL" != "OP13" ] || [ "$OP_OS_VERSION" != "A16" ]; then
+            cp "$COMMON_KERNEL_FOLDER/out/Module.symvers" "$DEBUG_ARTIFACTS_FOLDER/Module.symvers"
+            cp "$COMMON_KERNEL_FOLDER/out/vmlinux" "$DEBUG_ARTIFACTS_FOLDER/vmlinux"
+            cp "$COMMON_KERNEL_FOLDER/out/System.map" "$DEBUG_ARTIFACTS_FOLDER/System.map"
+          fi
           
           ls -la "$DEBUG_ARTIFACTS_FOLDER"
         else
@@ -2236,6 +2367,7 @@ runs:
 
     - name: Create Kernel ZIP
       id: create_zip
+      if: ${{ inputs.debug != 'true' || github.ref != 'refs/heads/qcom' || env.OP_MODEL != 'OP13' || env.OP_OS_VERSION != 'A16' || github.event.inputs.make_release == 'true' }}
       shell: bash
       run: |
         set -euo pipefail
@@ -2349,7 +2481,11 @@ runs:
           echo "Droidspaces: ${{ env.OP_DS }}"
           echo ""
           echo "Image SHA256: ${{ steps.collect_stats.outputs.image_sha256 }}"
-          echo "AnyKernel3 ZIP SHA256: ${{ steps.create_zip.outputs.zip_sha256 }}"
+          if [ "$GITHUB_REF" = "refs/heads/qcom" ] && [ "${{ inputs.debug }}" = "true" ] && [ "${{ env.OP_MODEL }}" = "OP13" ] && [ "${{ env.OP_OS_VERSION }}" = "A16" ] && [ "${{ github.event.inputs.make_release }}" != "true" ]; then
+            echo "AnyKernel3 ZIP: skipped for the OP13 A16 qcom-scm debug build"
+          else
+            echo "AnyKernel3 ZIP SHA256: ${{ steps.create_zip.outputs.zip_sha256 }}"
+          fi
           echo "Compiler: ${CLANG_VERSION:-unknown}"
           echo "Warnings Count: ${{ steps.collect_stats.outputs.warnings_count }}"
           echo "Build Time: ${{ steps.collect_stats.outputs.build_time }}s"
@@ -2359,7 +2495,11 @@ runs:
           else
             echo "ccache: Disabled (clean build)"
           fi
-          echo "Artifact Name: ${{ env.ZIP_NAME }}"
+          if [ "$GITHUB_REF" = "refs/heads/qcom" ] && [ "${{ inputs.debug }}" = "true" ] && [ "${{ env.OP_MODEL }}" = "OP13" ] && [ "${{ env.OP_OS_VERSION }}" = "A16" ] && [ "${{ github.event.inputs.make_release }}" != "true" ]; then
+            echo "Artifact Name: ${{ env.DEBUG_ZIP_NAME }}"
+          else
+            echo "Artifact Name: ${{ env.ZIP_NAME }}"
+          fi
         } | tee summary.txt
         
         {
@@ -2432,8 +2572,13 @@ runs:
           echo "| **Image SHA256** | \`${{ steps.collect_stats.outputs.image_sha256 }}\` |"
           echo "| **Warnings** | ${{ steps.collect_stats.outputs.warnings_count }} |"
           echo "| **Compiler** | \`${CLANG_VERSION:-unknown}\` |"
-          echo "| **Artifact Name** | \`${{ env.ZIP_NAME }}\` |"
-          echo "| **AnyKernel3 SHA256** | \`${{ steps.create_zip.outputs.zip_sha256 }}\` |"
+          if [ "$GITHUB_REF" = "refs/heads/qcom" ] && [ "${{ inputs.debug }}" = "true" ] && [ "${{ env.OP_MODEL }}" = "OP13" ] && [ "${{ env.OP_OS_VERSION }}" = "A16" ] && [ "${{ github.event.inputs.make_release }}" != "true" ]; then
+            echo "| **Artifact Name** | \`${{ env.DEBUG_ZIP_NAME }}\` |"
+            echo "| **AnyKernel3 ZIP** | Not generated for the qcom-scm debug build |"
+          else
+            echo "| **Artifact Name** | \`${{ env.ZIP_NAME }}\` |"
+            echo "| **AnyKernel3 SHA256** | \`${{ steps.create_zip.outputs.zip_sha256 }}\` |"
+          fi
         } >> "$GITHUB_STEP_SUMMARY"
 
     - name: Upload Debug Artifacts
@@ -2443,6 +2588,15 @@ runs:
         name: ${{ env.DEBUG_ZIP_NAME }}
         path: ${{ env.DEBUG_ARTIFACTS_FOLDER }}
         compression-level: 9
+        retention-days: 90
+
+    - name: Upload OP13 A16 qcom-scm module
+      if: ${{ always() && !cancelled() && inputs.debug == 'true' && github.ref == 'refs/heads/qcom' && env.OP_MODEL == 'OP13' && env.OP_OS_VERSION == 'A16' && steps.build_kernel_step.conclusion == 'success' }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: qcom-scm-${{ env.OP_MODEL }}-${{ env.OP_OS_VERSION }}-${{ env.KERNEL_FULL_VER }}
+        path: ${{ env.DEBUG_ARTIFACTS_FOLDER }}/qcom-scm.ko
+        archive: false
         retention-days: 90
 
     - name: Upload Artifacts
