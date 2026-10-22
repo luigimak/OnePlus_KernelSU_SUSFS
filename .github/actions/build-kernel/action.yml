@@ -1881,6 +1881,22 @@ runs:
           patch -p1 < "$KERNEL_PATCHES_FOLDER/common/vendor_modules/0001-Support-conditional-vendor-modules-blacklisting-6.1-and-above.patch"
         fi
         
+    - name: Apply OP13 A16 Qualcomm SCM Rollback Patch
+      if: ${{ env.OP_MODEL == 'OP13' && env.OP_OS_VERSION == 'A16' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Apply OP13 A16 Qualcomm SCM rollback patch"
+        cd "$COMMON_KERNEL_FOLDER"
+        patch_file=$(mktemp)
+        trap 'rm -f "$patch_file"' EXIT
+        curl -fL --retry 3 --retry-delay 5 \
+          -o "$patch_file" \
+          "https://github.com/luigimak/android_kernel_oneplus_sm8750/commit/ce8475c70f6d2426373625c3c156d13dc9cfa58a.patch"
+        patch -p1 --forward < "$patch_file"
+        echo "✅ OP13 A16 Qualcomm SCM rollback patch applied"
+        echo "::endgroup::"
+
     - name: Build Kernel
       id: build_kernel_step
       shell: bash
