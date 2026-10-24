@@ -2009,6 +2009,10 @@ runs:
             ;;
         esac
         
+        if [ "$OP_MODEL" = "OP-N6X" ]; then
+          scripts/config --file "$OUT/.config" -d OPLUS_NFC
+        fi
+
         
         make LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" O="$OUT" olddefconfig
         
