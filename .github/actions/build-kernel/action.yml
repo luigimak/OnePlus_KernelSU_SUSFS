@@ -1881,6 +1881,31 @@ runs:
           patch -p1 < "$KERNEL_PATCHES_FOLDER/common/vendor_modules/0001-Support-conditional-vendor-modules-blacklisting-6.1-and-above.patch"
         fi
         
+    - name: Fix libbpf host const correctness
+      if: ${{ (env.OP_ANDROID_VERSION == 'android14' && env.OP_KERNEL_VERSION == '6.1') || (env.OP_ANDROID_VERSION == 'android15' && env.OP_KERNEL_VERSION == '6.6') }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        LIBBPF_SOURCE="$COMMON_KERNEL_FOLDER/tools/lib/bpf/libbpf.c"
+
+        if [ ! -f "$LIBBPF_SOURCE" ]; then
+          echo "::error::Expected libbpf source not found: $LIBBPF_SOURCE"
+          exit 1
+        fi
+
+        mutable_count=$(grep -Ec '^[[:space:]]*char[[:space:]]+\*next_path;[[:space:]]*$' "$LIBBPF_SOURCE" || true)
+        const_count=$(grep -Ec '^[[:space:]]*const[[:space:]]+char[[:space:]]+\*next_path;[[:space:]]*$' "$LIBBPF_SOURCE" || true)
+
+        if [ "$mutable_count" -eq 1 ] && [ "$const_count" -eq 0 ]; then
+          sed -i -E 's/^([[:space:]]*)char[[:space:]]+\*next_path;[[:space:]]*$/\1const char *next_path;/' "$LIBBPF_SOURCE"
+          echo "Updated next_path to const char * in $LIBBPF_SOURCE"
+        elif [ "$mutable_count" -eq 0 ] && [ "$const_count" -eq 1 ]; then
+          echo "libbpf next_path is already const-correct"
+        else
+          echo "::error::Expected exactly one mutable or const next_path declaration in $LIBBPF_SOURCE (mutable=$mutable_count, const=$const_count)"
+          exit 1
+        fi
+
     - name: Build Kernel
       id: build_kernel_step
       shell: bash
