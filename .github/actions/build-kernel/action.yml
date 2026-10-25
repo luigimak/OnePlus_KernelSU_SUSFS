@@ -1919,8 +1919,22 @@ runs:
         source "$KERNEL_PLATFORM_FOLDER/build/kernel/_setup_env.sh" 2>/dev/null || true
         set -u
         
-        echo '#!/bin/bash' > "$COMMON_KERNEL_FOLDER/ld-wrapper"
-        echo 'ld.lld "$@" --thinlto-jobs=$(nproc --all)' >> "$COMMON_KERNEL_FOLDER/ld-wrapper"
+        LD_LLD_BIN="$(command -v ld.lld || true)"
+        if [ -z "$LD_LLD_BIN" ]; then
+          echo "::error::ld.lld was not found in PATH"
+          exit 1
+        fi
+        if ! "$LD_LLD_BIN" --version >/dev/null 2>&1; then
+          SYSTEM_LLD="/usr/bin/ld.lld"
+          if [ ! -x "$SYSTEM_LLD" ] || ! "$SYSTEM_LLD" --version >/dev/null 2>&1; then
+            echo "::error::The selected ld.lld cannot run and the system ld.lld fallback is unavailable"
+            exit 1
+          fi
+          echo "::warning::Selected ld.lld cannot run on this host; using $SYSTEM_LLD"
+          LD_LLD_BIN="$SYSTEM_LLD"
+        fi
+
+        printf '#!/bin/bash\nexec %q "$@" --thinlto-jobs="$(nproc --all)"\n' "$LD_LLD_BIN" > "$COMMON_KERNEL_FOLDER/ld-wrapper"
         chmod +x "$COMMON_KERNEL_FOLDER/ld-wrapper"
         
         KERNEL_BUILD_DATE=$(date -u)
