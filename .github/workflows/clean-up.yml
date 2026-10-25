@@ -137,7 +137,7 @@ permissions:
 
 jobs:
   analyze:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     outputs:
       should_cleanup: ${{ steps.analysis.outputs.should_cleanup }}
       total_cache_size: ${{ steps.analysis.outputs.total_size }}
@@ -148,7 +148,7 @@ jobs:
     steps:
       - name: 📊 Analyze Repository Health
         id: analysis
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -455,7 +455,7 @@ jobs:
             console.log(`   - Cleanup needed: ${shouldCleanup}`);
 
   cleanup-caches:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     needs: analyze
     if: |
       always() &&
@@ -464,7 +464,7 @@ jobs:
     
     steps:
       - name: 🗑️ Smart Cache Cleanup
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -777,7 +777,7 @@ jobs:
             summary.write();
 
   cleanup-runs:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     needs: analyze
     if: |
       always() &&
@@ -786,7 +786,7 @@ jobs:
     
     steps:
       - name: 🗑️ Clean old workflow runs
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -939,13 +939,13 @@ jobs:
             summary.write();
 
   final-report:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     needs: [analyze, cleanup-caches, cleanup-runs]
     if: always()
     
     steps:
       - name: 📊 Final Repository Health Report
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const { owner, repo } = context.repo;
