@@ -1765,6 +1765,7 @@ runs:
         CONFIG_NETFILTER_XT_TARGET_LOG=y
         CONFIG_NETFILTER_XT_MATCH_RECENT=y
         CONFIG_USER_NS=y
+        CONFIG_MACVLAN=y
         EOF
         
         if [ "${{ env.OP_RUST_BUILD }}" = "true" ]; then
