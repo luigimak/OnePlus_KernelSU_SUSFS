@@ -176,6 +176,8 @@ jobs:
           esac
           
           filtered=$(jq -c "$jq_filter" matrix.json)
+          # TEMP (ddk test): OP13 A16 only - DO NOT MERGE
+          filtered=$(jq -c 'map(select(.model == "OP13" and .os_version == "A16"))' <<<"$filtered")
           count=$(jq 'length' <<<"$filtered")
           
           filtered=$(echo "$filtered" | jq '
