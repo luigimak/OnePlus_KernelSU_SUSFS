@@ -149,12 +149,12 @@ runs:
         "${REPO}" --version
         success=false
         for i in 1 2 3; do
-          if "${REPO}" sync -c --no-clone-bundle --no-tags --optimized-fetch \
+          if timeout -k 30 600 "${REPO}" sync -c --no-clone-bundle --no-tags --optimized-fetch \
             -j"$(nproc --all)" --fail-fast; then
             success=true
             break
           fi
-          echo "repo sync attempt ${i} failed; retrying..."
+          echo "::warning::repo sync attempt ${i} failed or timed out (600s); retrying..."
           sleep 30
         done
         ${success} || { echo "repo sync failed after 3 attempts"; exit 1; }
