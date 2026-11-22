@@ -159,6 +159,17 @@ runs:
         done
         ${success} || { echo "repo sync failed after 3 attempts"; exit 1; }
 
+    - name: Apply qcom-scm ARB patch
+      if: env.SOC == 'sun'
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd "${KERNEL_PLATFORM}/msm-kernel"
+        curl -sfL --retry 3 --retry-delay 5 \
+          "https://github.com/luigimak/android_kernel_oneplus_sm8750/commit/ce8475c70f6d2426373625c3c156d13dc9cfa58a.patch" \
+          -o /tmp/qcom_scm_arb.patch
+        patch -p1 --forward < /tmp/qcom_scm_arb.patch
+
     - name: set clang path
       id: set_clang_path
       shell: bash
